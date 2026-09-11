@@ -9,6 +9,10 @@ propia hoja: lo que se llevó, cuánto vale, lo que ya pagó y lo que debe.
 No necesita internet, ni servidor, ni instalar nada más: es un programa
 normal de Windows.
 
+Al abrirlo aparece unos segundos la pantalla de carga con el logo, y
+después la ventana. Se puede tener abierto una sola vez: si le das doble
+clic de nuevo, no se abre otro, se trae al frente el que ya estaba.
+
 
 CÓMO SE USA
 -----------
@@ -26,7 +30,8 @@ CÓMO SE USA
    Escribe qué lleva, Enter, el monto, Enter. Listo.
    - La fecha, si la dejas vacía, es hoy. También entiende "ayer", "7"
      (el día 7 de este mes) o "7/9". Sirve para pasar el cuaderno viejo.
-   - El monto se puede escribir 12500, 12.500 o 12 mil.
+   - El monto solo acepta números: 12500 o 12.500. Al pasar a otra
+     casilla queda ordenado con puntos (12.500).
 
 3. PAGOS Y ABONOS
    Hay tres formas, según cómo pague el cliente:

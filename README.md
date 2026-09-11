@@ -17,6 +17,8 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
 - Se puede deshacer todo: volver una compra a pendiente o deshacer un abono completo.
 - Estado de cuenta listo para imprimir o guardar como PDF, y mensaje para WhatsApp.
 - Copia de seguridad automática cada día; copia manual y restauración desde el menú Archivo.
+- Pantalla de carga con el logo al abrir, y una sola ventana abierta a la vez.
+- Las casillas de monto solo aceptan números; teléfono solo números, espacios, `+` y guion.
 
 ## Cómo está hecho
 

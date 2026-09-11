@@ -25,14 +25,6 @@ Add-Type -TypeDefinition $codigo
 
 New-Item -ItemType Directory -Force -Path $Destino | Out-Null
 
-$p = Start-Process -FilePath $Exe -PassThru
-Start-Sleep -Seconds 15
-if ($p.HasExited) {
-    Write-Error "La aplicacion se cerro sola (codigo $($p.ExitCode))."
-    exit 1
-}
-Write-Host "La app siguio abierta 15 segundos: arranca bien."
-
 function Fotografiar($nombre) {
     $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
     $h = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
@@ -49,6 +41,20 @@ function Teclas($texto, $espera = 2) {
     [System.Windows.Forms.SendKeys]::SendWait($texto)
     Start-Sleep -Seconds $espera
 }
+
+# La pantalla de carga dura unos 3 segundos; para fotografiarla sin apuro se
+# alarga solo en esta prueba.
+$env:LIBRO_PRESENTACION_SEGUNDOS = "14"
+$p = Start-Process -FilePath $Exe -PassThru
+Start-Sleep -Seconds 7
+Fotografiar "0-cargando"
+Start-Sleep -Seconds 12
+if ($p.HasExited) {
+    Write-Error "La aplicacion se cerro sola (codigo $($p.ExitCode))."
+    exit 1
+}
+Write-Host "La app siguio abierta: arranca bien."
+$env:LIBRO_PRESENTACION_SEGUNDOS = $null
 
 # La ventana se centra sola; un clic en la cabecera la trae al frente sin
 # tocar ningun boton. Despues todo se hace con el teclado, que no depende de
@@ -83,6 +89,22 @@ Fotografiar "7-deuda-antigua"
 
 Teclas "{ESC}"
 Fotografiar "8-resumen-actualizado"
+
+# Una sola ventana: abrirlo otra vez no debe abrir un segundo programa.
+$antes = @(Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue).Count
+$otra = Start-Process -FilePath $Exe -PassThru
+Start-Sleep -Seconds 12
+$despues = @(Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue).Count
+if (-not $otra.HasExited) {
+    Write-Error "Se abrio una segunda ventana del programa."
+    exit 1
+}
+if ($despues -ne $antes) {
+    Write-Error "Habia $antes procesos y quedaron $despues."
+    exit 1
+}
+Write-Host "Una sola ventana: la segunda vez no abrio otra ($antes procesos antes y despues)."
+Fotografiar "10-sigue-una-sola"
 
 Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Seconds 3

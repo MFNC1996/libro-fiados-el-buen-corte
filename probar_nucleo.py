@@ -218,6 +218,84 @@ falla_con("un archivo cualquiera no se restaura", d.restaurar, basura)
 falla_con("un archivo que no existe", N.Datos.revisar_copia, basura + "x")
 check("la base sigue sana", d.deuda(ana), 4000)
 
+print("\n--- 3000 operaciones al azar: las cuentas siempre cuadran ---")
+import random
+azar = random.Random(1996)            # siempre las mismas, para poder repetir una falla
+d = N.Datos(os.path.join(tempfile.mkdtemp(), "azar.sqlite3"))
+clientes = [d.agregar_cliente("Cliente %d" % i) for i in range(6)]
+hechas = {"anotar": 0, "pagada": 0, "pendiente": 0, "abono": 0, "deshacer": 0,
+          "borrar": 0, "corregir": 0, "rechazada": 0}
+
+def revisar_todo():
+    """Lo que tiene que cumplirse siempre, pase lo que pase."""
+    malos = []
+    for cl in clientes:
+        compras = d.compras_de(cl)
+        pagos = d.pagos_de(cl)
+        fiado = sum(c["monto"] for c in compras)
+        pagado = sum(p["monto"] for p in pagos)
+        if d.deuda(cl) != fiado - pagado:
+            malos.append("deuda != fiado - pagado (cliente %d)" % cl)
+        if d.deuda(cl) != sum(c["falta"] for c in compras):
+            malos.append("deuda != suma de lo que falta (cliente %d)" % cl)
+        for c in compras:
+            if not (0 <= c["abonado"] <= c["monto"]):
+                malos.append("compra %d con abonado fuera de rango" % c["id"])
+            estado = (N.PAGADA if c["falta"] == 0 else
+                      N.PARCIAL if c["abonado"] else N.PENDIENTE)
+            if c["estado"] != estado:
+                malos.append("compra %d con estado equivocado" % c["id"])
+        for p in pagos:
+            if p["monto"] <= 0 or p["monto"] != sum(a["monto"] for a in p["aplicaciones"]):
+                malos.append("pago %d no cuadra con lo que cubre" % p["id"])
+        if d.deuda(cl) < 0:
+            malos.append("deuda negativa (cliente %d)" % cl)
+    huerfanas = d.cx.execute("""SELECT COUNT(*) FROM aplicaciones a
+                                 LEFT JOIN compras c ON c.id = a.compra_id
+                                 LEFT JOIN pagos p ON p.id = a.pago_id
+                                WHERE c.id IS NULL OR p.id IS NULL""").fetchone()[0]
+    if huerfanas:
+        malos.append("%d abonos colgando de algo que ya no existe" % huerfanas)
+    return malos
+
+primer_error = None
+for paso in range(3000):
+    cl = azar.choice(clientes)
+    compras = d.compras_de(cl)
+    op = azar.choice(["anotar"] * 4 + ["pagada", "pendiente", "abono", "abono",
+                                       "deshacer", "borrar", "corregir"])
+    try:
+        if op == "anotar" or not compras:
+            op = "anotar"
+            d.anotar(cl, "cosa %d" % paso, azar.randint(1, 60) * 500,
+                     "2026-%02d-%02d" % (azar.randint(1, 9), azar.randint(1, 28)))
+        elif op == "pagada":
+            d.marcar_pagada(azar.choice(compras)["id"])
+        elif op == "pendiente":
+            d.marcar_pendiente(azar.choice(compras)["id"])
+        elif op == "abono":
+            deuda = d.deuda(cl)
+            d.recibir_pago(cl, azar.randint(1, max(1, deuda + 5000)))   # a veces de mas
+        elif op == "deshacer":
+            pagos = d.pagos_de(cl)
+            if pagos:
+                d.borrar_pago(azar.choice(pagos)["id"])
+        elif op == "borrar":
+            d.borrar_compra(azar.choice(compras)["id"])
+        elif op == "corregir":
+            c = azar.choice(compras)
+            d.editar_compra(c["id"], c["fecha"], c["detalle"], azar.randint(1, 60) * 500)
+        hechas[op] += 1
+    except ValueError:
+        hechas["rechazada"] += 1        # lo que no se puede hacer se rechaza, sin romper nada
+    malos = revisar_todo()
+    if malos and primer_error is None:
+        primer_error = "paso %d (%s): %s" % (paso, op, malos[0])
+        break
+check("ninguna operacion descuadra las cuentas", primer_error, None)
+print("       " + ", ".join("%s %d" % (k, n) for k, n in hechas.items()))
+check("hubo de todo", all(n > 20 for n in hechas.values()), True)
+
 print()
 if fallas:
     print("FALLARON %d PRUEBAS:" % len(fallas))

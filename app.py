@@ -9,6 +9,7 @@ Aplicacion de escritorio. No necesita internet ni servidor.
 import os
 import subprocess
 import sys
+import time
 import traceback
 import urllib.parse
 import webbrowser
@@ -38,7 +39,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "1.1.2"
+VERSION = "1.2.0"
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -120,29 +121,69 @@ class Boton(tk.Label):
 
 
 class Campo(tk.Entry):
-    """Casilla de texto plana, con una pista gris cuando esta vacia."""
+    """
+    Casilla de texto plana, con una pista gris cuando esta vacia.
 
-    def __init__(self, padre, pista="", ancho=20, tam=11):
+    tipo="monto": solo deja escribir numeros (y el punto de los miles); al
+    salir de la casilla el monto se ordena con puntos: 12500 -> 12.500.
+    tipo="telefono": numeros, espacios, + y guion.
+    Cualquier otro: texto libre, pero con un largo maximo.
+    """
+    PERMITIDOS = {"monto": set("0123456789. $"),
+                  "telefono": set("0123456789 +-()")}
+    LARGOS = {"monto": 11, "telefono": 20, "texto": 100}
+
+    def __init__(self, padre, pista="", ancho=20, tam=11, tipo="texto", largo=None):
         tk.Entry.__init__(self, padre, relief="flat", bd=0, bg=BLANCO, fg=TINTA,
                           insertbackground=TINTA, highlightthickness=1,
                           highlightbackground=LINEA, highlightcolor=ROJO,
                           font=(FUENTE, tam), width=ancho,
                           disabledbackground=PAPEL)
         self.pista = pista
+        self.tipo = tipo
+        self.permitidos = self.PERMITIDOS.get(tipo)
+        self.largo = largo or self.LARGOS.get(tipo, 100)
         self._con_pista = False
+        self._libre = False           # la pista y el formato no pasan por el filtro
+        self.config(validate="key", validatecommand=(self.register(self._valido), "%P"))
         self.bind("<FocusIn>", self._entrar, add="+")
         self.bind("<FocusOut>", self._salir, add="+")
         self._salir()
 
+    def _valido(self, nuevo):
+        """Tk pregunta antes de cada tecla (o pegado) si el texto nuevo sirve."""
+        if self._libre:
+            return True
+        if len(nuevo) > self.largo:
+            self.bell()
+            return False
+        if self.permitidos is not None and any(c not in self.permitidos for c in nuevo):
+            self.bell()
+            return False
+        return True
+
+    def _sin_filtro(self, accion):
+        self._libre = True
+        try:
+            accion()
+        finally:
+            self._libre = False
+
     def _entrar(self, evento=None):
         if self._con_pista:
-            self.delete(0, "end")
+            self._sin_filtro(lambda: self.delete(0, "end"))
             self.config(fg=TINTA)
             self._con_pista = False
 
     def _salir(self, evento=None):
+        texto = tk.Entry.get(self)
+        if texto and not self._con_pista and self.tipo == "monto":
+            monto = N.leer_monto(texto)
+            if monto:
+                bonito = "{:,}".format(monto).replace(",", ".")
+                self._sin_filtro(lambda: (self.delete(0, "end"), self.insert(0, bonito)))
         if not tk.Entry.get(self) and self.pista:
-            self.insert(0, self.pista)
+            self._sin_filtro(lambda: self.insert(0, self.pista))
             self.config(fg=PISTA)
             self._con_pista = True
 
@@ -160,9 +201,59 @@ class Campo(tk.Entry):
         self.poner("")
 
 
+# ======================================================= pantalla de carga
+class Presentacion(tk.Toplevel):
+    """El logo al centro, el nombre del local y una barra que avanza."""
+
+    def __init__(self, padre):
+        tk.Toplevel.__init__(self, padre, bg=BLANCO)
+        self.overrideredirect(True)             # sin barra de titulo
+        try:
+            self.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        marco = tk.Frame(self, bg=BLANCO, highlightthickness=1, highlightbackground=LINEA)
+        marco.pack(fill="both", expand=True)
+        tk.Frame(marco, bg=VERDE, height=6).pack(fill="x")
+        tk.Frame(marco, bg=ROJO_OSCURO, height=2).pack(fill="x")
+        self.img = None
+        try:
+            import imagen_marca
+            self.img = tk.PhotoImage(data=imagen_marca.INICIO)
+            tk.Label(marco, image=self.img, bg=BLANCO).pack(pady=(24, 10))
+        except Exception:
+            tk.Frame(marco, bg=BLANCO, height=24).pack()
+        tk.Label(marco, text="Carnicería El Buen Corte", bg=BLANCO, fg=ROJO,
+                 font=(FUENTE, 19, "bold italic")).pack()
+        tk.Label(marco, text="LIBRO DE FIADOS  ·  LONCOCHE", bg=BLANCO, fg=SUAVE,
+                 font=(FUENTE, 9, "bold")).pack(pady=(2, 18))
+        self.ancho_barra = px(300)
+        self.barra = tk.Canvas(marco, width=self.ancho_barra, height=px(6), bg="#ECE7E1",
+                               highlightthickness=0, bd=0)
+        self.barra.pack()
+        self.relleno = self.barra.create_rectangle(0, 0, 0, px(6), fill=VERDE, width=0)
+        self.lbl = tk.Label(marco, text="", bg=BLANCO, fg=SUAVE, font=(FUENTE, 10))
+        self.lbl.pack(pady=(8, 0))
+        tk.Label(marco, text="by %s  ·  versión %s" % (AUTOR, VERSION), bg=BLANCO, fg=PISTA,
+                 font=(FUENTE, 8, "italic")).pack(side="bottom", pady=(0, 12))
+        self.update_idletasks()
+        ancho = max(px(440), self.winfo_reqwidth())
+        alto = self.winfo_reqheight()
+        self.geometry("%dx%d+%d+%d" % (ancho, alto,
+                                       (self.winfo_screenwidth() - ancho) // 2,
+                                       (self.winfo_screenheight() - alto) // 2))
+        self.update()
+
+    def paso(self, texto, porcentaje):
+        self.lbl.config(text=texto)
+        self.barra.coords(self.relleno, 0, 0,
+                          self.ancho_barra * max(0, min(100, porcentaje)) / 100.0, px(6))
+        self.update()
+
+
 # ================================================================== ventana
 class App(tk.Tk):
-    def __init__(self):
+    def __init__(self, presentacion=False):
         tk.Tk.__init__(self)
         global ESCALA
         try:
@@ -172,11 +263,23 @@ class App(tk.Tk):
         if sys.platform == "darwin":
             ESCALA = 1.0            # el Mac ya escala todo solo
 
+        # Mientras se arma todo, la ventana queda escondida y se ve la
+        # pantalla de carga con el logo.
+        inicio = time.time()
+        self._splash = None
+        if presentacion:
+            self.withdraw()
+            self._icono()
+            self._splash = Presentacion(self)
+        self._paso("Abriendo el libro...", 12)
+
         self.datos = N.Datos()
+        self._paso("Guardando la copia de seguridad del día...", 26)
         try:
             self.datos.respaldar()
         except Exception:
             pass
+        self._paso("Preparando la ventana...", 40)
 
         self.title(TITULO)
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
@@ -188,8 +291,9 @@ class App(tk.Tk):
         self.geometry("%dx%d+%d+%d" % (ancho, alto, max(0, (sw - ancho) // 2),
                                        max(0, (sh - px(80) - alto) // 3)))
         self.minsize(min(px(900), ancho), min(px(560), alto))
-        if self.pantalla_chica and sys.platform.startswith("win"):
-            self.state("zoomed")
+        self._maximizar = self.pantalla_chica and sys.platform.startswith("win")
+        if self._maximizar and not presentacion:
+            self.state("zoomed")        # con presentacion se maximiza al mostrarla
         self.configure(bg=PAPEL)
         self._icono()
 
@@ -213,9 +317,51 @@ class App(tk.Tk):
 
         self._atajos()
         self.protocol("WM_DELETE_WINDOW", self.cerrar)
+        self._paso("Cargando clientes...", 52)
         self.recargar_todo()
         self.mostrar_inicio()
-        self.after(200, lambda: self.e_buscar.focus_set())
+        if self._splash is not None:
+            self._terminar_presentacion(inicio)
+        else:
+            self.after(200, lambda: self.e_buscar.focus_set())
+
+    # ------------------------------------------------------- pantalla de carga
+    def _paso(self, texto, porcentaje):
+        if self._splash is not None:
+            self._splash.paso(texto, porcentaje)
+
+    def _terminar_presentacion(self, inicio):
+        """Completa la barra con calma y despues muestra la ventana."""
+        try:
+            duracion = float(os.environ.get("LIBRO_PRESENTACION_SEGUNDOS", "2.8"))
+        except ValueError:
+            duracion = 2.8
+        pasos = [("Cargando compras y abonos...", 68), ("Revisando las cuentas...", 84),
+                 ("Todo listo", 100)]
+        resto = max(0.3, duracion - (time.time() - inicio))
+        espera = int(resto * 1000 / (len(pasos) + 1))
+
+        def seguir(i=0):
+            if i < len(pasos):
+                self._paso(*pasos[i])
+                self.after(espera, lambda: seguir(i + 1))
+            else:
+                self.after(espera, self._mostrar_ventana)
+        seguir()
+
+    def _mostrar_ventana(self):
+        if self._splash is not None:
+            self._splash.destroy()
+            self._splash = None
+        self.deiconify()
+        if self._maximizar:
+            self.state("zoomed")
+        self.lift()
+        try:
+            self.focus_force()
+        except tk.TclError:
+            pass
+        self.after(150, lambda: self.e_buscar.focus_set())
 
     # ------------------------------------------------------------ apariencia
     def _icono(self):
@@ -369,7 +515,7 @@ class App(tk.Tk):
         self.lbl_n_clientes.pack(side="left", padx=(6, 0))
         Boton(arriba, "Ver resumen", self.mostrar_inicio, "link", "chico").pack(side="right")
 
-        self.e_buscar = Campo(izq, pista="Buscar por nombre o teléfono...", tam=11)
+        self.e_buscar = Campo(izq, pista="Buscar por nombre o teléfono...", tam=11, largo=60)
         self.e_buscar.pack(fill="x", padx=14, ipady=px(6))
         self.e_buscar.bind("<KeyRelease>", self._al_buscar)
         self.e_buscar.bind("<Return>", self._buscar_enter)
@@ -648,7 +794,7 @@ class App(tk.Tk):
         tk.Label(titulo, text="ANOTAR LO QUE LLEVA", bg=BLANCO, fg=ROJO,
                  font=(FUENTE, 9, "bold")).pack(side="left")
         self.lbl_ayuda_anotar = tk.Label(
-            titulo, text="Enter pasa al siguiente y anota   ·   Monto: 12500, 12.500 o 12 mil",
+            titulo, text="Enter pasa al siguiente y anota   ·   Monto: solo números, ej. 12500",
             bg=BLANCO, fg=PISTA, font=(FUENTE, 8))
         self.lbl_ayuda_anotar.pack(side="right")
         cf = tk.Frame(f, bg=BLANCO)
@@ -659,11 +805,12 @@ class App(tk.Tk):
         for col, texto in ((1, "Qué lleva"), (2, "Monto")):
             tk.Label(f, text=texto, bg=BLANCO, fg=SUAVE, font=(FUENTE, 9)).grid(
                 row=1, column=col, sticky="w", padx=(0, 10))
-        self.e_fecha = Campo(f, pista="hoy", ancho=11, tam=12)
+        self.e_fecha = Campo(f, pista="hoy", ancho=11, tam=12, largo=30)
         self.e_fecha.grid(row=2, column=0, sticky="we", padx=(0, 10), ipady=px(5))
-        self.e_detalle = Campo(f, pista="Ej: 1 kg de molida, 2 chuletas", ancho=26, tam=12)
+        self.e_detalle = Campo(f, pista="Ej: 1 kg de molida, 2 chuletas", ancho=26, tam=12,
+                               largo=80)
         self.e_detalle.grid(row=2, column=1, sticky="we", padx=(0, 10), ipady=px(5))
-        self.e_monto = Campo(f, pista="$", ancho=10, tam=12)
+        self.e_monto = Campo(f, pista="$", ancho=10, tam=12, tipo="monto")
         self.e_monto.grid(row=2, column=2, sticky="we", padx=(0, 10), ipady=px(5))
         self.btn_anotar = Boton(f, "ANOTAR", self.anotar, "rojo")
         self.btn_anotar.grid(row=2, column=3, sticky="ns")
@@ -968,7 +1115,7 @@ class App(tk.Tk):
         monto = N.leer_monto(self.e_monto.valor())
         if not monto:
             self.e_monto.focus_set()
-            return self.avisar("Falta el monto. Escríbelo así: 12500, 12.500 o 12 mil.",
+            return self.avisar("Falta el monto. Escríbelo así: 12500 o 12.500.",
                                ROJO)
         detalle = self.e_detalle.valor()
         try:
@@ -1371,6 +1518,12 @@ class App(tk.Tk):
                                          self.datos.ruta))
 
     def cerrar(self):
+        # Lo que quedaba programado (borrar un aviso, etc.) ya no tiene ventana.
+        try:
+            for pendiente in self.tk.splitlist(self.tk.call("after", "info")):
+                self.after_cancel(pendiente)
+        except tk.TclError:
+            pass
         # Al cerrar se renueva la copia del dia, con todo lo anotado hoy.
         try:
             self.datos.respaldar(reemplazar=True)
@@ -1410,11 +1563,12 @@ class Dialogo(tk.Toplevel):
         self.bind("<Return>", lambda e: self._ok())
         self.bind("<Escape>", lambda e: self.destroy())
 
-    def campo(self, fila, rotulo, pista="", valor="", ancho=34, ayuda=""):
+    def campo(self, fila, rotulo, pista="", valor="", ancho=34, ayuda="", tipo="texto",
+              largo=None):
         tk.Label(self.cuerpo, text=rotulo, bg=BLANCO, fg=SUAVE,
                  font=(FUENTE, 9, "bold")).grid(row=fila * 2, column=0, sticky="w",
                                                 pady=(8, 2))
-        c = Campo(self.cuerpo, pista=pista, ancho=ancho, tam=12)
+        c = Campo(self.cuerpo, pista=pista, ancho=ancho, tam=12, tipo=tipo, largo=largo)
         c.grid(row=fila * 2 + 1, column=0, sticky="we", ipady=px(6))
         if valor:
             c.poner(valor)
@@ -1467,11 +1621,12 @@ class DialogoCliente(Dialogo):
                  font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
         self.cuerpo.grid_rowconfigure(0, minsize=px(30))
         c = cliente or {}
-        self.e_nombre = self.campo(1, "NOMBRE", "Ej: Juan Pérez", c.get("nombre") or nombre)
+        self.e_nombre = self.campo(1, "NOMBRE", "Ej: Juan Pérez", c.get("nombre") or nombre,
+                                   largo=60)
         self.e_tel = self.campo(2, "TELÉFONO  (opcional)", "Ej: 9 1234 5678",
-                                c.get("telefono", ""))
+                                c.get("telefono", ""), tipo="telefono")
         self.e_nota = self.campo(3, "NOTA  (opcional)", "Ej: vecino del frente, paga los "
-                                 "viernes", c.get("nota", ""))
+                                 "viernes", c.get("nota", ""), largo=120)
 
     def aceptar(self):
         if self.cl:
@@ -1488,10 +1643,10 @@ class DialogoCompra(Dialogo):
         self.datos, self.c = padre.datos, compra
         tk.Label(self.cuerpo, text="Corregir compra", bg=BLANCO, fg=TINTA,
                  font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
-        self.e_fecha = self.campo(1, "FECHA", "hoy", N.fecha_txt(compra["fecha"]), 14,
+        self.e_fecha = self.campo(1, "FECHA", "hoy", N.fecha_txt(compra["fecha"]), 14, largo=30,
                                   ayuda="Ej: 7/9, ayer")
-        self.e_det = self.campo(2, "QUÉ LLEVÓ", "", compra["detalle"])
-        self.e_monto = self.campo(3, "MONTO", "$", N.pesos(compra["monto"]), 14)
+        self.e_det = self.campo(2, "QUÉ LLEVÓ", "", compra["detalle"], largo=80)
+        self.e_monto = self.campo(3, "MONTO", "$", N.pesos(compra["monto"]), 14, tipo="monto")
         self.primero = self.e_det
         if compra["abonado"]:
             tk.Label(self.cuerpo, bg=BLANCO, fg=AMBAR, font=(FUENTE, 9),
@@ -1502,6 +1657,8 @@ class DialogoCompra(Dialogo):
         fecha = N.leer_fecha(self.e_fecha.valor())
         if fecha is None:
             raise ValueError("No entiendo la fecha. Escríbela así: 7/9/2026.")
+        if fecha > date.today().isoformat():
+            raise ValueError("Esa fecha todavía no llega.")
         self.datos.editar_compra(self.c["id"], fecha, self.e_det.valor(),
                                  self.e_monto.valor())
         return True
@@ -1518,7 +1675,7 @@ class DialogoPago(Dialogo):
         tk.Label(self.cuerpo, text="Debe %s" % N.pesos(cliente["deuda"]), bg=BLANCO,
                  fg=ROJO_OSCURO, font=(FUENTE, 12, "bold")).grid(row=1, column=0,
                                                                  sticky="w")
-        self.e_monto = self.campo(1, "¿CUÁNTO ABONA?", "$", "", 18)
+        self.e_monto = self.campo(1, "¿CUÁNTO ABONA?", "$", "", 18, tipo="monto")
         self.lbl_prev = tk.Label(self.cuerpo, text="", bg=BLANCO, fg=VERDE,
                                  font=(FUENTE, 11, "bold"), justify="left",
                                  wraplength=px(360))
@@ -1581,7 +1738,7 @@ def main():
         return 0
     preparar_windows()
     try:
-        App().mainloop()
+        App(presentacion=True).mainloop()
     except Exception:
         try:
             import tkinter.messagebox as mb

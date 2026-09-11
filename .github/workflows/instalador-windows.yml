@@ -150,15 +150,28 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.2
-          name: Libro de Fiados 1.1.2
+          tag_name: v1.2.0
+          name: Libro de Fiados 1.2.0
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
             Una hoja por cliente: lo que se anoto, cuanto vale, lo que ya pago
             y lo que queda pendiente.
 
-            ### Novedad de la 1.1: abonos
+            ### Novedades de la 1.2
+
+            - Pantalla de carga al abrir: el logo al centro, el nombre del local
+              y una barra que avanza mientras se prepara todo.
+            - Las casillas de monto solo aceptan numeros (y el punto de los
+              miles); al salir de la casilla el monto queda ordenado: 12500 ->
+              12.500. El telefono solo acepta numeros, espacios, + y guion.
+              Nombre, detalle y nota tienen un largo maximo.
+            - Una sola ventana: si se abre el programa dos veces, no se abre
+              otro; se trae al frente el que ya estaba. Probado en Windows.
+            - Revisado con 3.000 operaciones al azar (anotar, pagar, abonar,
+              deshacer, borrar, corregir): las cuentas cuadran siempre.
+
+            ### Abonos
 
             El boton verde ABONAR registra lo que el cliente entrega a cuenta.
             Solo se escribe cuanto abona; queda con la fecha del dia. Por
