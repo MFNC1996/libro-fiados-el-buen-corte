@@ -38,7 +38,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -397,8 +397,9 @@ class App(tk.Tk):
                             command=lambda: self._ordenar("nombre"))
         self.tv_cli.heading("debe", text="Debe", anchor="e",
                             command=lambda: self._ordenar("deuda"))
-        self.tv_cli.column("nombre", width=px(140), stretch=True, anchor="w")
-        self.tv_cli.column("debe", width=px(90), stretch=False, anchor="e")
+        # Angostas a proposito: el nombre se estira solo y "Debe" nunca se corta.
+        self.tv_cli.column("nombre", width=px(110), stretch=True, anchor="w")
+        self.tv_cli.column("debe", width=px(84), stretch=False, anchor="e")
         self.tv_cli.tag_configure("aldia", foreground=SUAVE)
         self.tv_cli.tag_configure("debe", foreground=TINTA)
         self.tv_cli.tag_configure("archivado", foreground=PISTA)

@@ -150,8 +150,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: Libro de Fiados 1.1.0
+          tag_name: v1.1.1
+          name: Libro de Fiados 1.1.1
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
