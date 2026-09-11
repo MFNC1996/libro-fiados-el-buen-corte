@@ -1,0 +1,185 @@
+name: Instalador de Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  construir:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar PyInstaller
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller==6.11.1
+
+      - name: Probar las cuentas
+        run: python probar_nucleo.py
+
+      - name: Probar la ventana en Windows
+        run: python probar_ventana.py
+
+      - name: Construir el .exe
+        run: pyinstaller --noconfirm --clean empaquetado/LibroDeFiados.spec
+
+      - name: Llenar con datos de ejemplo para las capturas
+        run: python empaquetado/sembrar_demo.py
+
+      - name: Abrir la app y fotografiar cada pantalla
+        shell: pwsh
+        run: empaquetado/capturar.ps1
+
+      - name: Asegurar Inno Setup
+        run: choco install innosetup -y --no-progress
+        shell: pwsh
+
+      - name: Construir el instalador
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "iscc" }
+          & $iscc empaquetado\instalador.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Comprobar que el instalador quedo armado
+        shell: pwsh
+        run: |
+          $i = Get-Item "salida\LibroDeFiados-Setup.exe"
+          $e = Get-Item "dist\LibroDeFiados.exe"
+          Write-Host ("exe:        {0:N1} MB" -f ($e.Length / 1MB))
+          Write-Host ("instalador: {0:N1} MB" -f ($i.Length / 1MB))
+          if ($i.Length -lt 3MB) { Write-Error "El instalador quedo muy chico."; exit 1 }
+
+      - name: Instalar de verdad, abrir la app instalada y desinstalar
+        shell: pwsh
+        run: |
+          $destino = "C:\PruebaLibroDeFiados"
+          Write-Host "== Instalando en silencio =="
+          $i = Start-Process -FilePath "salida\LibroDeFiados-Setup.exe" `
+               -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART", `
+                             "/DIR=$destino","/TASKS=" -Wait -PassThru
+          if ($i.ExitCode -ne 0) {
+            Write-Error "El instalador termino con codigo $($i.ExitCode)."; exit 1
+          }
+
+          $exe = Join-Path $destino "LibroDeFiados.exe"
+          if (-not (Test-Path $exe)) { Write-Error "No quedo instalado $exe"; exit 1 }
+          if (-not (Test-Path (Join-Path $destino "LEEME.txt"))) {
+            Write-Error "Falta el LEEME junto a la aplicacion"; exit 1
+          }
+          $desinst = Get-ChildItem $destino -Filter "unins*.exe" | Select-Object -First 1
+          if (-not $desinst) { Write-Error "No quedo desinstalador"; exit 1 }
+          Write-Host "Instalado correctamente en $destino"
+
+          Write-Host "== Abriendo la aplicacion instalada =="
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) {
+            Write-Error "La app instalada se cerro sola (codigo $($p.ExitCode))."
+            exit 1
+          }
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $a = [System.Windows.Forms.SystemInformation]::VirtualScreen.Width
+          $h = [System.Windows.Forms.SystemInformation]::VirtualScreen.Height
+          $bmp = New-Object System.Drawing.Bitmap $a, $h
+          [System.Drawing.Graphics]::FromImage($bmp).CopyFromScreen(0,0,0,0,$bmp.Size)
+          $bmp.Save("$PWD\capturas\9-instalada.png",
+                    [System.Drawing.Imaging.ImageFormat]::Png)
+          Write-Host "La app instalada siguio abierta 15 segundos."
+          # Un ejecutable de PyInstaller en un solo archivo corre como dos
+          # procesos: el lanzador y la aplicacion. Hay que cerrar los dos, o el
+          # que queda retiene el .exe y despues no se puede desinstalar.
+          Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue |
+            Stop-Process -Force
+          Start-Sleep -Seconds 5
+          $vivos = @(Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue)
+          if ($vivos.Count -gt 0) { Write-Error "Quedaron $($vivos.Count) procesos vivos."; exit 1 }
+
+          Write-Host "== Desinstalando =="
+          $reg = "$PWD\desinstalacion.log"
+          Start-Process -FilePath $desinst.FullName `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=$reg" `
+            -Wait | Out-Null
+          # El desinstalador de Inno Setup se copia a la carpeta temporal y
+          # sigue trabajando en segundo plano, asi que -Wait vuelve antes de
+          # tiempo. Hay que esperar a que el ejecutable desaparezca.
+          $limite = (Get-Date).AddSeconds(90)
+          while ((Test-Path $exe) -and (Get-Date) -lt $limite) { Start-Sleep -Seconds 3 }
+          if (Test-Path $exe) {
+            if (Test-Path $reg) { Get-Content $reg | Select-Object -Last 40 }
+            Write-Error "Tras 90 segundos la desinstalacion dejo $exe en su lugar."
+            exit 1
+          }
+          Write-Host "Desinstalado limpio."
+
+          Write-Host "== Los datos siguen ahi despues de desinstalar =="
+          $datos = Join-Path $env:LOCALAPPDATA "LibroDeFiados\fiados.sqlite3"
+          if (-not (Test-Path $datos)) { Write-Error "Desinstalar borro los datos"; exit 1 }
+          Write-Host "Los datos quedaron a salvo en $datos"
+
+      - name: Guardar el instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibroDeFiados-Setup
+          path: salida/LibroDeFiados-Setup.exe
+
+      - name: Guardar la version portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: LibroDeFiados-portable
+          path: dist/LibroDeFiados.exe
+
+      - name: Guardar las capturas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-ventana
+          path: capturas/
+
+      - name: Publicar la version descargable
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: Libro de Fiados 1.0.0
+          body: |
+            Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
+
+            Una hoja por cliente: lo que se anoto, cuanto vale, lo que ya pago
+            y lo que queda pendiente.
+
+            - Lista de clientes con lo que debe cada uno, y un buscador.
+            - Anotar es una sola fila: que lleva y cuanto. Enter y listo.
+            - Check de pagado en cada compra.
+            - Recibir pago por un monto (abonos): se descuenta desde la compra
+              mas antigua, y se puede deshacer.
+            - Estado de cuenta listo para imprimir o guardar en PDF.
+            - Mensaje con el detalle de la cuenta para mandar por WhatsApp.
+            - Copia de seguridad automatica cada dia.
+
+            ---
+
+            Desarrollado por Macoem.
+
+            **Descarga `LibroDeFiados-Setup.exe` y dale doble clic.**
+
+            No necesita internet, ni servidor, ni instalar Python.
+            Los datos quedan en tu carpeta de usuario, asi que se puede
+            actualizar la aplicacion sin perder nada de lo anotado.
+
+            **`LibroDeFiados.exe`** es la version portable: corre tal cual, sin
+            instalar. Las dos guardan los datos en el mismo lugar.
+          files: |
+            salida/LibroDeFiados-Setup.exe
+            dist/LibroDeFiados.exe
+          fail_on_unmatched_files: true

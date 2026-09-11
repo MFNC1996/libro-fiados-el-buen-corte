@@ -1,0 +1,98 @@
+LIBRO DE FIADOS  -  Carnicería El Buen Corte, Loncoche
+=====================================================
+
+QUÉ ES
+------
+El cuaderno de los fiados, pero en el computador. Cada cliente tiene su
+propia hoja: lo que se llevó, cuánto vale, lo que ya pagó y lo que debe.
+
+No necesita internet, ni servidor, ni instalar nada más: es un programa
+normal de Windows.
+
+
+CÓMO SE USA
+-----------
+1. CLIENTES
+   A la izquierda está la lista de clientes, con lo que debe cada uno.
+   Con "+ Nuevo cliente" agregas a alguien (nombre, y si quieres, teléfono
+   y una nota). El buscador de arriba encuentra por nombre o teléfono;
+   si escribes un nombre que no existe y aprietas Enter, te ofrece crearlo.
+
+2. ANOTAR LO QUE LLEVA  (esto es lo del día a día)
+   Abre la hoja del cliente. Arriba hay una sola fila:
+
+       Fecha  |  Qué lleva  |  Monto  |  ANOTAR
+
+   Escribe qué lleva, Enter, el monto, Enter. Listo.
+   - La fecha, si la dejas vacía, es hoy. También entiende "ayer", "7"
+     (el día 7 de este mes) o "7/9". Sirve para pasar el cuaderno viejo.
+   - El monto se puede escribir 12500, 12.500 o 12 mil.
+
+3. PAGOS
+   Hay tres formas, según cómo pague el cliente:
+
+   - CHECK DE PAGADO: en cada compra, clic en  "☐ Pagar"  y esa compra
+     queda pagada. Si fue un error, otro clic la deja pendiente de nuevo.
+
+   - RECIBIR PAGO: el cliente entrega una parte (un abono). Escribes
+     cuánto entregó y se descuenta desde la compra más antigua. Antes de
+     aceptar te dice qué compras quedan pagadas y cuánto va a quedar
+     debiendo. Si entrega más de lo que debe, te dice cuánto es el vuelto.
+
+   - PAGÓ TODO: deja la cuenta al día de una vez.
+
+   Arriba de las compras eliges qué ver: "Por pagar", "Todas" o "Pagadas".
+   En la pestaña "Pagos recibidos" está cada pago con la fecha y a qué
+   compras se descontó. Si un pago se anotó mal, "Deshacer este pago"
+   deja todo como estaba antes.
+
+4. CORREGIR
+   Doble clic en una compra (o el botón "Corregir") para cambiar la fecha,
+   el detalle o el monto. "Borrar" la elimina; si ya tenía pagos, primero
+   hay que dejarla pendiente.
+
+5. COBRAR
+   - "Estado de cuenta (imprimir)": abre la cuenta del cliente lista para
+     imprimir, con el logo del local. Para mandarla como PDF, al imprimir
+     elige "Microsoft Print to PDF".
+   - "Mandar por WhatsApp": arma un mensaje con el detalle de lo que
+     debe. Si el cliente tiene teléfono, abre WhatsApp con el mensaje
+     escrito; si no, queda copiado para pegarlo con Ctrl+V.
+
+6. EL RESUMEN
+   La pantalla de inicio (tecla Esc, o clic en el logo) muestra cuánto hay
+   por cobrar en total, cuánto se fió y cuánto se cobró este mes, y la lista
+   de los que deben de mayor a menor. En rojo, los que deben hace más de
+   30 días.
+
+7. QUITAR UN CLIENTE
+   "Quitar de la lista" en su hoja. Solo se puede si no debe nada. Si tiene
+   historia queda archivado (se ve marcando "Mostrar archivados").
+
+
+ATAJOS DE TECLADO
+-----------------
+   Ctrl+N   nuevo cliente              Ctrl+R   recibir pago
+   Ctrl+B   buscar cliente             Ctrl+P   estado de cuenta
+   Esc      volver al resumen          Enter    pasar al siguiente / anotar
+
+
+DÓNDE QUEDAN LOS DATOS
+----------------------
+En tu carpeta de usuario, no dentro del programa:
+
+    C:\Users\TU-USUARIO\AppData\Local\LibroDeFiados\fiados.sqlite3
+
+Por eso puedes instalar una versión nueva, o desinstalar y volver a
+instalar, sin perder nada. En el menú Archivo, "Abrir la carpeta de datos"
+te lleva ahí.
+
+COPIAS DE SEGURIDAD
+   El programa guarda solo una copia por día en la carpeta "respaldos"
+   (se quedan las últimas 60). Además, en el menú Archivo:
+   - "Guardar una copia de seguridad..." para llevarla a un pendrive.
+   - "Restaurar desde una copia..." para volver a una copia. Lo que había
+     antes no se pierde: queda guardado en la misma carpeta de respaldos.
+
+
+Desarrollado por Macoem.

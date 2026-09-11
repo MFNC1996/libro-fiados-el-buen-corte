@@ -1,0 +1,11 @@
+.claude/
+.DS_Store
+__pycache__/
+*.pyc
+build/
+dist/
+salida/
+capturas/
+*.sqlite3
+*.sqlite3-*
+empaquetado/icono-chico.png
