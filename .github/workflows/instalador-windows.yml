@@ -150,8 +150,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.1
-          name: Libro de Fiados 1.1.1
+          tag_name: v1.1.2
+          name: Libro de Fiados 1.1.2
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
@@ -161,11 +161,10 @@ jobs:
             ### Novedad de la 1.1: abonos
 
             El boton verde ABONAR registra lo que el cliente entrega a cuenta.
-            Por ejemplo: debe $45.000 y el martes 13 abona $30.000. Se escribe
-            "30000" y la fecha "martes 13" (o "13", o "13/10"), y antes de
-            guardar el programa dice que compras quedan pagadas y que queda
-            debiendo $15.000. El abono se descuenta desde la compra mas antigua
-            y se puede deshacer en la pestana "Pagos y abonos".
+            Solo se escribe cuanto abona; queda con la fecha del dia. Por
+            ejemplo: debe $45.000 y abona $30.000: antes de guardar dice
+            "Queda debiendo $15.000". El abono se descuenta desde la compra mas
+            antigua y se puede deshacer en la pestana "Pagos y abonos".
 
             Ademas, la ventana se acomoda a pantallas chicas (notebooks de
             1366 x 768): se abre maximizada y nada queda cortado.

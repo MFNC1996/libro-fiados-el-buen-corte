@@ -69,8 +69,7 @@ Teclas "{ENTER}"
 Fotografiar "4-anotado"
 
 Teclas "^r"
-Teclas "30000{TAB}" 1            # abona 30 mil...
-Teclas "martes" 1                # ...el martes
+Teclas "30000" 1                 # abona 30 mil
 Fotografiar "5-abonar"
 Teclas "{ESC}" 1
 

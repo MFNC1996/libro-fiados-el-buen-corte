@@ -38,7 +38,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -1107,9 +1107,8 @@ class App(tk.Tk):
         if r:
             self.nb.select(self.tab_compras)
             self.recargar_todo()
-            self.avisar("Abono de %s: %s el %s. Ahora debe %s." % (
-                self._cl["nombre"], N.pesos(r["monto"]), N.fecha_corta(r["fecha"]),
-                N.pesos(self._cl["deuda"])))
+            self.avisar("Abono de %s: %s. Ahora debe %s." % (
+                self._cl["nombre"], N.pesos(r["monto"]), N.pesos(self._cl["deuda"])))
 
     def pago_todo(self):
         if self.sel is None or self._cl["deuda"] <= 0 or self.grab_current() is not None:
@@ -1353,8 +1352,8 @@ class App(tk.Tk):
             "3. PAGOS Y ABONOS\n"
             "• Clic en «☐ Pagar» de una compra: queda pagada.\n"
             "• ABONAR: el cliente entrega una parte (por ejemplo $30.000 de $45.000). "
-            "Se descuenta desde la compra más antigua y queda debiendo el resto. "
-            "La fecha puede ser «hoy», «martes» o «13».\n"
+            "Solo escribes cuánto abona; queda con la fecha de hoy y se descuenta "
+            "desde la compra más antigua.\n"
             "• Pagó todo: deja la cuenta al día de una vez.\n\n"
             "4. CORREGIR\n"
             "«Volver a pendiente» quita un pago de una compra. En «Pagos y abonos» "
@@ -1509,79 +1508,42 @@ class DialogoCompra(Dialogo):
 
 
 class DialogoPago(Dialogo):
-    """Abono o pago: el cliente entrega plata y se descuenta de lo que debe."""
+    """Abono: solo se pregunta cuanto entrega. La fecha es la del dia."""
 
     def __init__(self, padre, cliente, datos):
         Dialogo.__init__(self, padre, "Abonar", "Registrar abono", "verde")
         self.datos, self.cl = datos, cliente
-        self.pend = sorted(datos.compras_de(cliente["id"], "pendientes"),
-                           key=lambda c: (c["fecha"], c["id"]))
         tk.Label(self.cuerpo, text="Abono de %s" % cliente["nombre"], bg=BLANCO, fg=TINTA,
-                 font=(FUENTE, 15, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+                 font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
         tk.Label(self.cuerpo, text="Debe %s" % N.pesos(cliente["deuda"]), bg=BLANCO,
                  fg=ROJO_OSCURO, font=(FUENTE, 12, "bold")).grid(row=1, column=0,
                                                                  sticky="w")
-        self.e_monto = self.campo(1, "¿CUÁNTO ABONA?", "$", "", 16,
-                                  ayuda="Una parte, o todo lo que debe")
-        self.e_fecha = self.campo(2, "¿CUÁNDO?", "hoy", "", 16,
-                                  ayuda="Ej: hoy, ayer, martes, 13")
-        self.e_nota = self.campo(3, "NOTA  (opcional)", "Ej: efectivo, transferencia")
+        self.e_monto = self.campo(1, "¿CUÁNTO ABONA?", "$", "", 18)
         self.lbl_prev = tk.Label(self.cuerpo, text="", bg=BLANCO, fg=VERDE,
-                                 font=(FUENTE, 10), justify="left", wraplength=px(420))
-        self.lbl_prev.grid(row=9, column=0, columnspan=2, sticky="w", pady=(12, 0))
+                                 font=(FUENTE, 11, "bold"), justify="left",
+                                 wraplength=px(360))
+        self.lbl_prev.grid(row=4, column=0, sticky="w", pady=(12, 0))
         self.e_monto.bind("<KeyRelease>", lambda e: self._previa())
-        self.e_fecha.bind("<KeyRelease>", lambda e: self._previa())
         self._previa()
 
     def _previa(self):
-        """Cuenta, antes de aceptar, cuando es y que compras va a cubrir el abono."""
-        fecha = N.leer_fecha(self.e_fecha.valor())
-        if fecha is None:
-            return self.lbl_prev.config(text="No entiendo la fecha. Escribe por ejemplo "
-                                             "hoy, martes, 13 o 13/10.", fg=ROJO)
-        larga = N.fecha_larga(fecha)
-        cuando = "Hoy" if fecha == date.today().isoformat() else \
-            "El " + larga[:larga.rfind(" de ")]
+        """Antes de aceptar, cuanto va a quedar debiendo."""
         monto = N.leer_monto(self.e_monto.valor())
         deuda = self.cl["deuda"]
         if not monto:
-            return self.lbl_prev.config(text="%s. Escribe cuánto abona." % cuando,
-                                        fg=SUAVE)
-        if monto > deuda:
-            return self.lbl_prev.config(
-                text="Es más de lo que debe. Recibe %s y entrega el vuelto: %s."
-                     % (N.pesos(deuda), N.pesos(monto - deuda)), fg=ROJO)
-        resto, saldadas, abonada = monto, [], None
-        for c in self.pend:
-            if resto <= 0:
-                break
-            parte = min(resto, c["falta"])
-            resto -= parte
-            if parte == c["falta"]:
-                saldadas.append(c)
-            else:
-                abonada = (c, parte)
-        partes = ["%s abona %s." % (cuando, N.pesos(monto))]
-        if saldadas:
-            partes.append("Quedan pagadas %d compra%s (desde la más antigua)."
-                          % (len(saldadas), "" if len(saldadas) == 1 else "s"))
-        if abonada:
-            partes.append("A «%s» del %s se le abonan %s." % (
-                abonada[0]["detalle"] or "compra", N.fecha_corta(abonada[0]["fecha"]),
-                N.pesos(abonada[1])))
-        partes.append("Queda al día." if monto == deuda else
-                      "Después del abono debe %s." % N.pesos(deuda - monto))
-        self.lbl_prev.config(text="\n".join(partes), fg=VERDE)
+            self.lbl_prev.config(text="", fg=VERDE)
+        elif monto > deuda:
+            self.lbl_prev.config(text="Es más de lo que debe. El vuelto es %s."
+                                      % N.pesos(monto - deuda), fg=ROJO)
+        elif monto == deuda:
+            self.lbl_prev.config(text="Queda al día.", fg=VERDE)
+        else:
+            self.lbl_prev.config(text="Queda debiendo %s." % N.pesos(deuda - monto),
+                                 fg=VERDE)
 
     def aceptar(self):
-        fecha = N.leer_fecha(self.e_fecha.valor())
-        if fecha is None:
-            raise ValueError("No entiendo la fecha. Escríbela así: martes, 13 o 13/10, "
-                             "o déjala vacía para hoy.")
-        if fecha > date.today().isoformat():
-            raise ValueError("Esa fecha todavía no llega.")
-        r = self.datos.recibir_pago(self.cl["id"], self.e_monto.valor(), fecha,
-                                    self.e_nota.valor())
+        fecha = date.today().isoformat()
+        r = self.datos.recibir_pago(self.cl["id"], self.e_monto.valor(), fecha)
         r["fecha"] = fecha
         return r
 

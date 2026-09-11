@@ -35,14 +35,12 @@ CÓMO SE USA
      queda pagada. Si fue un error, otro clic la deja pendiente de nuevo.
 
    - ABONAR (botón verde): el cliente entrega una parte de lo que debe.
-     Ejemplo: debe $45.000 y el martes 13 abona $30.000.
-       ¿Cuánto abona?  30000
-       ¿Cuándo?        martes 13      (también sirve "13", "13/10" o
-                                      "martes"; vacío es hoy)
-     Antes de guardar te dice qué compras quedan pagadas y cuánto va a
-     quedar debiendo: en el ejemplo, $15.000. El abono se descuenta desde
-     la compra más antigua; la que queda a medias dice cuánto se le abonó.
-     Si entrega más de lo que debe, te dice cuánto es el vuelto.
+     Solo se escribe cuánto abona; queda con la fecha del día.
+     Ejemplo: debe $45.000 y abona $30.000. Escribes 30000 y antes de
+     guardar te dice "Queda debiendo $15.000".
+     El abono se descuenta desde la compra más antigua; la que queda a
+     medias dice cuánto se le abonó. Si entrega más de lo que debe, te
+     dice cuánto es el vuelto.
 
    - PAGÓ TODO: deja la cuenta al día de una vez.
 
