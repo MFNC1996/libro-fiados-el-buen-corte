@@ -10,8 +10,10 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
 
 - Lista de clientes con lo que debe cada uno, buscador y orden por deuda.
 - Anotar es una sola fila: fecha (vacía = hoy), qué lleva y monto. Enter y listo.
-- Check de pagado en cada compra, y *Recibir pago* para abonos (se descuenta desde la compra más antigua).
-- Se puede deshacer todo: volver una compra a pendiente o deshacer un pago completo.
+- Check de pagado en cada compra, y **Abonar** para lo que el cliente entrega a cuenta
+  (ej.: debe $45.000, el martes 13 abona $30.000 y queda debiendo $15.000). Se descuenta desde la compra más antigua.
+- La fecha se escribe como se dice: `hoy`, `ayer`, `martes`, `13`, `martes 13`, `13 de octubre`, `13/10`.
+- Se puede deshacer todo: volver una compra a pendiente o deshacer un abono completo.
 - Estado de cuenta listo para imprimir o guardar como PDF, y mensaje para WhatsApp.
 - Copia de seguridad automática cada día; copia manual y restauración desde el menú Archivo.
 

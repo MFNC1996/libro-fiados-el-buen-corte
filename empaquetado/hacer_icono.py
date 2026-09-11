@@ -100,7 +100,7 @@ def main():
     # La marca para la ventana: cabecera, pantalla de inicio e icono de la
     # barra de titulo. Tambien la del estado de cuenta que se imprime.
     piezas = {
-        "CABECERA": en_png(logo.resize((66, 66), Image.LANCZOS)),
+        "CABECERA": en_png(logo.resize((58, 58), Image.LANCZOS)),
         "INICIO": en_png(logo.resize((190, 190), Image.LANCZOS)),
         "VENTANA": en_png(icono_chico(32)),
         "IMPRESO": en_png(logo.resize((220, 220), Image.LANCZOS)),

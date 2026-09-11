@@ -56,7 +56,7 @@ def armar(datos, cid, hoy=None):
             "<tr class='%s'><td>%s</td><td>%s</td><td class='n'>%s</td>"
             "<td class='n'>%s</td><td class='n'>%s</td></tr>"
             % ("pago" if es_pago else "", N.fecha_txt(m["fecha"]),
-               ("Pago" + (" &middot; " + _e(m["detalle"]) if m["detalle"] != "Pago" else ""))
+               ("Abono" + (" &middot; " + _e(m["detalle"]) if m["detalle"] != "Pago" else ""))
                if es_pago else _e(m["detalle"] or "Compra"),
                N.pesos(m["cargo"]) if m["cargo"] else "",
                N.pesos(m["abono"]) if m["abono"] else "",
@@ -185,7 +185,7 @@ PLANTILLA = """<!doctype html>
   <div class="cifras">
     <span>Compras pendientes: <b>%(n_pend)s</b></span>
     <span>Total fiado: <b>%(total_fiado)s</b></span>
-    <span>Total pagado: <b>%(total_pagado)s</b></span>
+    <span>Total abonado: <b>%(total_pagado)s</b></span>
   </div>
 
   <h2>Lo que est&aacute; pendiente</h2>
@@ -201,7 +201,7 @@ PLANTILLA = """<!doctype html>
   <h2>Historial de la cuenta</h2>
   <table>
     <thead><tr><th>Fecha</th><th>Movimiento</th><th class="n">Fiado</th>
-      <th class="n">Pag&oacute;</th><th class="n">Saldo</th></tr></thead>
+      <th class="n">Abon&oacute;</th><th class="n">Saldo</th></tr></thead>
     <tbody>
 %(filas_mov)s
     </tbody>

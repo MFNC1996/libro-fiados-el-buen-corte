@@ -28,23 +28,28 @@ CÓMO SE USA
      (el día 7 de este mes) o "7/9". Sirve para pasar el cuaderno viejo.
    - El monto se puede escribir 12500, 12.500 o 12 mil.
 
-3. PAGOS
+3. PAGOS Y ABONOS
    Hay tres formas, según cómo pague el cliente:
 
    - CHECK DE PAGADO: en cada compra, clic en  "☐ Pagar"  y esa compra
      queda pagada. Si fue un error, otro clic la deja pendiente de nuevo.
 
-   - RECIBIR PAGO: el cliente entrega una parte (un abono). Escribes
-     cuánto entregó y se descuenta desde la compra más antigua. Antes de
-     aceptar te dice qué compras quedan pagadas y cuánto va a quedar
-     debiendo. Si entrega más de lo que debe, te dice cuánto es el vuelto.
+   - ABONAR (botón verde): el cliente entrega una parte de lo que debe.
+     Ejemplo: debe $45.000 y el martes 13 abona $30.000.
+       ¿Cuánto abona?  30000
+       ¿Cuándo?        martes 13      (también sirve "13", "13/10" o
+                                      "martes"; vacío es hoy)
+     Antes de guardar te dice qué compras quedan pagadas y cuánto va a
+     quedar debiendo: en el ejemplo, $15.000. El abono se descuenta desde
+     la compra más antigua; la que queda a medias dice cuánto se le abonó.
+     Si entrega más de lo que debe, te dice cuánto es el vuelto.
 
    - PAGÓ TODO: deja la cuenta al día de una vez.
 
    Arriba de las compras eliges qué ver: "Por pagar", "Todas" o "Pagadas".
-   En la pestaña "Pagos recibidos" está cada pago con la fecha y a qué
-   compras se descontó. Si un pago se anotó mal, "Deshacer este pago"
-   deja todo como estaba antes.
+   En la pestaña "Pagos y abonos" está cada abono y pago con la fecha y a
+   qué compras se descontó. Si uno se anotó mal, "Deshacer" deja todo
+   como estaba antes.
 
 4. CORREGIR
    Doble clic en una compra (o el botón "Corregir") para cambiar la fecha,
@@ -52,27 +57,27 @@ CÓMO SE USA
    hay que dejarla pendiente.
 
 5. COBRAR
-   - "Estado de cuenta (imprimir)": abre la cuenta del cliente lista para
+   - "Imprimir cuenta": abre el estado de cuenta del cliente listo para
      imprimir, con el logo del local. Para mandarla como PDF, al imprimir
      elige "Microsoft Print to PDF".
-   - "Mandar por WhatsApp": arma un mensaje con el detalle de lo que
+   - "WhatsApp": arma un mensaje con el detalle de lo que
      debe. Si el cliente tiene teléfono, abre WhatsApp con el mensaje
      escrito; si no, queda copiado para pegarlo con Ctrl+V.
 
 6. EL RESUMEN
-   La pantalla de inicio (tecla Esc, o clic en el logo) muestra cuánto hay
+   La pantalla de inicio (tecla Esc, "Ver resumen" o clic en el logo) muestra cuánto hay
    por cobrar en total, cuánto se fió y cuánto se cobró este mes, y la lista
    de los que deben de mayor a menor. En rojo, los que deben hace más de
    30 días.
 
 7. QUITAR UN CLIENTE
-   "Quitar de la lista" en su hoja. Solo se puede si no debe nada. Si tiene
+   "Quitar" en su hoja. Solo se puede si no debe nada. Si tiene
    historia queda archivado (se ve marcando "Mostrar archivados").
 
 
 ATAJOS DE TECLADO
 -----------------
-   Ctrl+N   nuevo cliente              Ctrl+R   recibir pago
+   Ctrl+N   nuevo cliente              Ctrl+R   abonar
    Ctrl+B   buscar cliente             Ctrl+P   estado de cuenta
    Esc      volver al resumen          Enter    pasar al siguiente / anotar
 

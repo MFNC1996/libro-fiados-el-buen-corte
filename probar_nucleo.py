@@ -54,6 +54,19 @@ for texto, esperado in [("", "2026-09-10"), ("hoy", "2026-09-10"),
                         ("2026-09-07", "2026-09-07"), ("31/2", None),
                         ("hola", None), ("1/2/3/4", None)]:
     check("'%s'" % texto, N.leer_fecha(texto, hoy), esperado)
+print("\n--- fechas con dia de la semana y mes en palabras ---")
+martes20 = date(2026, 10, 20)                     # un martes; el 13 tambien fue martes
+for texto, esperado in [("martes", "2026-10-20"),          # hoy mismo es martes
+                        ("el lunes", "2026-10-19"), ("miércoles", "2026-10-14"),
+                        ("Martes 13", "2026-10-13"), ("el martes, 13", "2026-10-13"),
+                        ("13 de octubre", "2026-10-13"), ("martes 13 de octubre", "2026-10-13"),
+                        ("2 de enero", "2026-01-02"), ("25 de diciembre", "2025-12-25"),
+                        ("marte", None)]:
+    check("'%s'" % texto, N.leer_fecha(texto, martes20), esperado)
+check("'martes 13' busca el ultimo 13 que cayo martes", N.leer_fecha("martes 13", hoy),
+      "2026-01-13")
+check("fecha corta este anio", N.fecha_corta("2026-09-07", hoy), "07/09")
+check("fecha corta otro anio", N.fecha_corta("2025-12-28", hoy), "28/12/25")
 check("fecha corta", N.fecha_txt("2026-09-07"), "07/09/2026")
 check("fecha larga", N.fecha_larga("2026-09-07"), "lunes 7 de septiembre de 2026")
 
@@ -144,6 +157,20 @@ d.recibir_pago(juan, d.deuda(juan))
 check("queda al dia", d.deuda(juan), 0)
 check("todas pagadas", len(d.compras_de(juan, "pagadas")), 3)
 falla_con("pagar sin deuda", d.recibir_pago, juan, 100)
+
+print("\n--- el ejemplo: debe $45.000 y el martes 13 abona $30.000 ---")
+rosa = d.agregar_cliente("Rosa")
+a1 = d.anotar(rosa, "Asado", 20000, "2026-10-01")
+a2 = d.anotar(rosa, "Costillar", 25000, "2026-10-05")
+check("debe 45 mil", d.deuda(rosa), 45000)
+r = d.recibir_pago(rosa, "30 mil", N.leer_fecha("martes 13", martes20), "efectivo")
+check("queda debiendo 15 mil", d.deuda(rosa), 15000)
+check("el asado queda pagado", d._compra(a1)["estado"], N.PAGADA)
+check("al costillar se le abonan 10 mil", d._compra(a2)["abonado"], 10000)
+check("el costillar queda a medias", d._compra(a2)["estado"], N.PARCIAL)
+check("el abono queda con su fecha", d.pagos_de(rosa)[0]["fecha"], "2026-10-13")
+d.borrar_pago(r["pago_id"])
+d.borrar_compra(a1); d.borrar_compra(a2); d.quitar_cliente(rosa)
 
 print("\n--- estado de cuenta ---")
 mov = d.movimientos(juan)

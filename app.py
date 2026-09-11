@@ -38,7 +38,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -179,12 +179,17 @@ class App(tk.Tk):
             pass
 
         self.title(TITULO)
-        ancho = min(px(1200), self.winfo_screenwidth() - 40)
-        alto = min(px(760), self.winfo_screenheight() - 90)
-        self.geometry("%dx%d+%d+%d" % (
-            ancho, alto, max(0, (self.winfo_screenwidth() - ancho) // 2),
-            max(0, (self.winfo_screenheight() - alto) // 3)))
-        self.minsize(min(px(980), ancho), min(px(600), alto))
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        # En un notebook comun (1366 x 768) no sobra nada: se usa la pantalla
+        # entera, y se achican un poco el panel de clientes y las filas.
+        self.pantalla_chica = sw < px(1280) or sh < px(860)
+        ancho = min(px(1200), sw - 40)
+        alto = min(px(760), sh - px(130))           # que no quede bajo la barra de tareas
+        self.geometry("%dx%d+%d+%d" % (ancho, alto, max(0, (sw - ancho) // 2),
+                                       max(0, (sh - px(80) - alto) // 3)))
+        self.minsize(min(px(900), ancho), min(px(560), alto))
+        if self.pantalla_chica and sys.platform.startswith("win"):
+            self.state("zoomed")
         self.configure(bg=PAPEL)
         self._icono()
 
@@ -239,7 +244,8 @@ class App(tk.Tk):
         e.configure("Blanco.TCheckbutton", background=BLANCO, foreground=SUAVE,
                     font=(FUENTE, 9))
         e.map("Blanco.TCheckbutton", background=[("active", BLANCO)])
-        e.configure("Treeview", rowheight=px(30), fieldbackground=BLANCO,
+        e.configure("Treeview", rowheight=px(28 if self.pantalla_chica else 30),
+                    fieldbackground=BLANCO,
                     background=BLANCO, font=(FUENTE, 10), borderwidth=0)
         e.configure("Treeview.Heading", font=(FUENTE, 9, "bold"),
                     background=TINTA, foreground=PAPEL, padding=(px(6), px(7)),
@@ -247,7 +253,8 @@ class App(tk.Tk):
         e.map("Treeview.Heading", background=[("active", "#3B332F")])
         e.map("Treeview", background=[("selected", ROJO)],
               foreground=[("selected", BLANCO)])
-        e.configure("Clientes.Treeview", rowheight=px(34), font=(FUENTE, 11))
+        e.configure("Clientes.Treeview", rowheight=px(30 if self.pantalla_chica else 34),
+                    font=(FUENTE, 11))
         e.configure("Vertical.TScrollbar", background=PAPEL, troughcolor=BLANCO,
                     borderwidth=0, arrowcolor=SUAVE)
 
@@ -270,7 +277,7 @@ class App(tk.Tk):
         barra.add_cascade(label="Archivo", menu=archivo)
         cliente = tk.Menu(barra, tearoff=0)
         cliente.add_command(label="Anotar lo que lleva", command=self._foco_anotar)
-        cliente.add_command(label="Recibir pago...", accelerator="Ctrl+R",
+        cliente.add_command(label="Abonar / recibir pago...", accelerator="Ctrl+R",
                             command=self.recibir_pago)
         cliente.add_command(label="Pagó todo", command=self.pago_todo)
         cliente.add_separator()
@@ -298,24 +305,24 @@ class App(tk.Tk):
             import imagen_marca
             self.img_marca = tk.PhotoImage(data=imagen_marca.CABECERA)
             logo = tk.Label(barra, image=self.img_marca, bg=BLANCO, cursor="hand2")
-            logo.pack(side="left", padx=(16, 0), pady=8)
+            logo.pack(side="left", padx=(16, 0), pady=6)
             logo.bind("<Button-1>", lambda e: self.mostrar_inicio())
         except Exception:
             pass                      # sin la imagen la ventana igual sirve
 
         cont = tk.Frame(barra, bg=BLANCO)
-        cont.pack(side="left", padx=14, pady=10)
+        cont.pack(side="left", padx=12, pady=6)
         tk.Label(cont, text="El Buen Corte", bg=BLANCO, fg=ROJO,
-                 font=(FUENTE, 20, "bold italic")).pack(anchor="w")
+                 font=(FUENTE, 19, "bold italic")).pack(anchor="w")
         tk.Label(cont, text="LONCOCHE  ·  LIBRO DE FIADOS", bg=BLANCO, fg=SUAVE,
                  font=(FUENTE, 8, "bold")).pack(anchor="w", pady=(1, 0))
 
         derecha = tk.Frame(barra, bg=BLANCO)
-        derecha.pack(side="right", padx=22, pady=8)
+        derecha.pack(side="right", padx=22, pady=5)
         tk.Label(derecha, text="POR COBRAR EN TOTAL", bg=BLANCO, fg=SUAVE,
                  font=(FUENTE, 8, "bold")).pack(anchor="e")
         self.lbl_por_cobrar = tk.Label(derecha, text="$0", bg=BLANCO, fg=ROJO_OSCURO,
-                                       font=(FUENTE, 22, "bold"), cursor="hand2")
+                                       font=(FUENTE, 20, "bold"), cursor="hand2")
         self.lbl_por_cobrar.pack(anchor="e")
         self.lbl_por_cobrar.bind("<Button-1>", lambda e: self.mostrar_inicio())
         self.lbl_autor = tk.Label(derecha, text="by %s" % AUTOR, bg=BLANCO, fg=ROJO,
@@ -348,18 +355,19 @@ class App(tk.Tk):
 
     # ======================================================== lista CLIENTES
     def _panel_clientes(self, padre):
-        izq = tk.Frame(padre, bg=BLANCO, width=px(310))
+        izq = tk.Frame(padre, bg=BLANCO, width=px(262 if self.pantalla_chica else 300))
         izq.pack(side="left", fill="y")
         izq.pack_propagate(False)
         tk.Frame(padre, bg=LINEA, width=1).pack(side="left", fill="y")
 
         arriba = tk.Frame(izq, bg=BLANCO)
-        arriba.pack(fill="x", padx=14, pady=(14, 8))
+        arriba.pack(fill="x", padx=(14, 4), pady=(10, 6))
         tk.Label(arriba, text="CLIENTES", bg=BLANCO, fg=SUAVE,
                  font=(FUENTE, 9, "bold")).pack(side="left")
         self.lbl_n_clientes = tk.Label(arriba, text="", bg=BLANCO, fg=SUAVE,
                                        font=(FUENTE, 9))
-        self.lbl_n_clientes.pack(side="right")
+        self.lbl_n_clientes.pack(side="left", padx=(6, 0))
+        Boton(arriba, "Ver resumen", self.mostrar_inicio, "link", "chico").pack(side="right")
 
         self.e_buscar = Campo(izq, pista="Buscar por nombre o teléfono...", tam=11)
         self.e_buscar.pack(fill="x", padx=14, ipady=px(6))
@@ -389,8 +397,8 @@ class App(tk.Tk):
                             command=lambda: self._ordenar("nombre"))
         self.tv_cli.heading("debe", text="Debe", anchor="e",
                             command=lambda: self._ordenar("deuda"))
-        self.tv_cli.column("nombre", width=px(160), stretch=True, anchor="w")
-        self.tv_cli.column("debe", width=px(96), stretch=False, anchor="e")
+        self.tv_cli.column("nombre", width=px(140), stretch=True, anchor="w")
+        self.tv_cli.column("debe", width=px(90), stretch=False, anchor="e")
         self.tv_cli.tag_configure("aldia", foreground=SUAVE)
         self.tv_cli.tag_configure("debe", foreground=TINTA)
         self.tv_cli.tag_configure("archivado", foreground=PISTA)
@@ -505,11 +513,12 @@ class App(tk.Tk):
         cols = ("nombre", "debe", "pend", "desde", "pago")
         self.tv_mayores = ttk.Treeview(marco, columns=cols, show="headings",
                                        selectmode="browse")
-        for c, t, a, al in zip(cols, ("Cliente", "Debe", "Compras sin pagar",
-                                      "Debe desde", "Último pago"),
-                               (220, 110, 130, 190, 150), ("w", "e", "center", "w", "w")):
+        for c, t, a, al in zip(cols, ("Cliente", "Debe", "Sin pagar", "Debe desde",
+                                      "Último pago"),
+                               (160, 90, 76, 150, 96), ("w", "e", "center", "w", "w")):
             self.tv_mayores.heading(c, text=t, anchor=al)
-            self.tv_mayores.column(c, width=px(a), anchor=al, stretch=(c == "nombre"))
+            self.tv_mayores.column(c, width=px(a), minwidth=px(50), anchor=al,
+                                   stretch=(c in ("nombre", "desde")))
         self.tv_mayores.tag_configure("viejo", foreground=ROJO_OSCURO)
         sb = ttk.Scrollbar(marco, orient="vertical", command=self.tv_mayores.yview)
         self.tv_mayores.configure(yscrollcommand=sb.set)
@@ -552,9 +561,7 @@ class App(tk.Tk):
         self.tarjetas["por_cobrar"][1].config(text=N.pesos(r["por_cobrar"]))
         self.tarjetas["deben"][1].config(
             text="%d de %d" % (r["deben"], r["clientes"]) if r["clientes"] else "0")
-        self.tarjetas["fiado_mes"][0].config(text="FIADO EN %s" % r["mes"].upper())
         self.tarjetas["fiado_mes"][1].config(text=N.pesos(r["fiado_mes"]))
-        self.tarjetas["cobrado_mes"][0].config(text="COBRADO EN %s" % r["mes"].upper())
         self.tarjetas["cobrado_mes"][1].config(text=N.pesos(r["cobrado_mes"]))
 
         if r["clientes"] == 0:
@@ -566,9 +573,9 @@ class App(tk.Tk):
         self.tv_mayores.delete(*self.tv_mayores.get_children())
         for c in r["mayores"]:
             dias = N.dias_desde(c["mas_antigua"])
-            desde = "%s  (%s)" % (N.fecha_txt(c["mas_antigua"]),
+            desde = "%s  (%s)" % (N.fecha_corta(c["mas_antigua"]),
                                   N.hace_cuanto(c["mas_antigua"]))
-            pago = N.fecha_txt(c["ultimo_pago"]) if c["ultimo_pago"] else "nunca"
+            pago = N.fecha_corta(c["ultimo_pago"]) if c["ultimo_pago"] else "nunca"
             self.tv_mayores.insert("", "end", iid=str(c["id"]),
                                    tags=("viejo",) if dias > 30 else (),
                                    values=(c["nombre"], N.pesos(c["deuda"]),
@@ -584,76 +591,81 @@ class App(tk.Tk):
 
         # -- ficha: quien es y cuanto debe
         ficha = tk.Frame(v, bg=BLANCO, highlightthickness=1, highlightbackground=LINEA)
-        ficha.pack(fill="x", padx=18, pady=(14, 10))
-        izq = tk.Frame(ficha, bg=BLANCO)
-        izq.pack(side="left", fill="both", expand=True, padx=(18, 8), pady=(8, 12))
-        Boton(izq, "‹  Volver al resumen", self.mostrar_inicio, "link",
-              "chico").pack(anchor="w", padx=0)
-        self.lbl_nombre = tk.Label(izq, text="", bg=BLANCO, fg=TINTA, anchor="w",
-                                   font=(FUENTE, 21, "bold"))
-        self.lbl_nombre.pack(anchor="w", fill="x")
-        self.lbl_datos = tk.Label(izq, text="", bg=BLANCO, fg=SUAVE, anchor="w",
-                                  font=(FUENTE, 10), justify="left")
-        self.lbl_datos.pack(anchor="w", fill="x")
-        acciones = tk.Frame(izq, bg=BLANCO)
-        acciones.pack(anchor="w", pady=(10, 0))
-        Boton(acciones, "Editar datos", self.editar_cliente, "claro",
-              "chico").pack(side="left", padx=(0, 6))
-        Boton(acciones, "Estado de cuenta (imprimir)", self.imprimir_estado,
-              "claro", "chico").pack(side="left", padx=(0, 6))
-        self.btn_whatsapp = Boton(acciones, "Mandar por WhatsApp", self.whatsapp,
-                                  "claro", "chico")
-        self.btn_whatsapp.pack(side="left", padx=(0, 6))
-        self.btn_quitar = Boton(acciones, "Quitar de la lista", self.quitar_cliente,
-                                "claro", "chico")
-        self.btn_quitar.pack(side="left")
-        self.lbl_archivado = tk.Label(izq, text="", bg=AMBAR_CLARO, fg=AMBAR,
-                                      font=(FUENTE, 9, "bold"), padx=10, pady=4)
-
-        der = tk.Frame(ficha, bg=BLANCO)
-        der.pack(side="right", padx=18, pady=12)
+        ficha.pack(fill="x", padx=18, pady=(12, 10))
+        arriba = tk.Frame(ficha, bg=BLANCO)
+        arriba.pack(fill="x", padx=18, pady=(10, 0))
+        # Lo que debe se arma primero: asi, si falta espacio, nunca se corta.
+        der = tk.Frame(arriba, bg=BLANCO)
+        der.pack(side="right", anchor="n")
         self.lbl_debe_rot = tk.Label(der, text="DEBE", bg=BLANCO, fg=SUAVE,
                                      font=(FUENTE, 9, "bold"))
         self.lbl_debe_rot.pack(anchor="e")
         self.lbl_deuda = tk.Label(der, text="", bg=BLANCO, fg=ROJO_OSCURO,
-                                  font=(FUENTE, 30, "bold"))
+                                  font=(FUENTE, 28, "bold"))
         self.lbl_deuda.pack(anchor="e")
         self.lbl_deuda_det = tk.Label(der, text="", bg=BLANCO, fg=SUAVE,
                                       font=(FUENTE, 9))
         self.lbl_deuda_det.pack(anchor="e")
-        bots = tk.Frame(der, bg=BLANCO)
-        bots.pack(anchor="e", pady=(10, 0))
+        izq = tk.Frame(arriba, bg=BLANCO)
+        izq.pack(side="left", fill="x", expand=True, anchor="n")
+        self.lbl_nombre = tk.Label(izq, text="", bg=BLANCO, fg=TINTA, anchor="w",
+                                   font=(FUENTE, 20, "bold"))
+        self.lbl_nombre.pack(anchor="w", fill="x")
+        self.lbl_datos = tk.Label(izq, text="", bg=BLANCO, fg=SUAVE, anchor="w",
+                                  font=(FUENTE, 10), justify="left")
+        self.lbl_datos.pack(anchor="w", fill="x")
+        self.lbl_archivado = tk.Label(izq, text="", bg=AMBAR_CLARO, fg=AMBAR,
+                                      font=(FUENTE, 9, "bold"), padx=10, pady=4)
+
+        abajo = tk.Frame(ficha, bg=BLANCO)
+        abajo.pack(fill="x", padx=18, pady=(8, 12))
+        bots = tk.Frame(abajo, bg=BLANCO)
+        bots.pack(side="right")
         self.btn_pagar_todo = Boton(bots, "Pagó todo", self.pago_todo, "claro")
         self.btn_pagar_todo.pack(side="left", padx=(0, 8))
-        self.btn_recibir = Boton(bots, "RECIBIR PAGO", self.recibir_pago, "verde")
+        self.btn_recibir = Boton(bots, "ABONAR", self.recibir_pago, "verde")
         self.btn_recibir.pack(side="left")
+        acciones = tk.Frame(abajo, bg=BLANCO)
+        acciones.pack(side="left")
+        Boton(acciones, "Editar", self.editar_cliente, "claro",
+              "chico").pack(side="left", padx=(0, 6))
+        Boton(acciones, "Imprimir cuenta", self.imprimir_estado,
+              "claro", "chico").pack(side="left", padx=(0, 6))
+        self.btn_whatsapp = Boton(acciones, "WhatsApp", self.whatsapp, "claro", "chico")
+        self.btn_whatsapp.pack(side="left", padx=(0, 6))
+        self.btn_quitar = Boton(acciones, "Quitar", self.quitar_cliente, "claro", "chico")
+        self.btn_quitar.pack(side="left")
 
         # -- anotar: la fila del dia a dia
         an = tk.Frame(v, bg=BLANCO, highlightthickness=1, highlightbackground=LINEA)
         an.pack(fill="x", padx=18, pady=(0, 10))
         tk.Frame(an, bg=ROJO, width=5).pack(side="left", fill="y")
         f = tk.Frame(an, bg=BLANCO)
-        f.pack(side="left", fill="x", expand=True, padx=14, pady=(10, 8))
-        tk.Label(f, text="ANOTAR LO QUE LLEVA", bg=BLANCO, fg=ROJO,
-                 font=(FUENTE, 9, "bold")).grid(row=0, column=0, columnspan=4,
-                                                sticky="w", pady=(0, 4))
-        for col, texto in enumerate(("Fecha", "Qué lleva", "Monto")):
+        f.pack(side="left", fill="x", expand=True, padx=14, pady=(8, 10))
+        titulo = tk.Frame(f, bg=BLANCO)
+        titulo.grid(row=0, column=0, columnspan=4, sticky="we", pady=(0, 2))
+        tk.Label(titulo, text="ANOTAR LO QUE LLEVA", bg=BLANCO, fg=ROJO,
+                 font=(FUENTE, 9, "bold")).pack(side="left")
+        self.lbl_ayuda_anotar = tk.Label(
+            titulo, text="Enter pasa al siguiente y anota   ·   Monto: 12500, 12.500 o 12 mil",
+            bg=BLANCO, fg=PISTA, font=(FUENTE, 8))
+        self.lbl_ayuda_anotar.pack(side="right")
+        cf = tk.Frame(f, bg=BLANCO)
+        cf.grid(row=1, column=0, sticky="w")
+        tk.Label(cf, text="Fecha", bg=BLANCO, fg=SUAVE, font=(FUENTE, 9)).pack(side="left")
+        self.lbl_fecha_ok = tk.Label(cf, text="", bg=BLANCO, fg=SUAVE, font=(FUENTE, 8))
+        self.lbl_fecha_ok.pack(side="left", padx=(6, 0))
+        for col, texto in ((1, "Qué lleva"), (2, "Monto")):
             tk.Label(f, text=texto, bg=BLANCO, fg=SUAVE, font=(FUENTE, 9)).grid(
                 row=1, column=col, sticky="w", padx=(0, 10))
         self.e_fecha = Campo(f, pista="hoy", ancho=11, tam=12)
-        self.e_fecha.grid(row=2, column=0, sticky="we", padx=(0, 10), ipady=px(6))
-        self.e_detalle = Campo(f, pista="Ej: 1 kg de molida, 2 chuletas", ancho=30, tam=12)
-        self.e_detalle.grid(row=2, column=1, sticky="we", padx=(0, 10), ipady=px(6))
-        self.e_monto = Campo(f, pista="$", ancho=11, tam=12)
-        self.e_monto.grid(row=2, column=2, sticky="we", padx=(0, 10), ipady=px(6))
+        self.e_fecha.grid(row=2, column=0, sticky="we", padx=(0, 10), ipady=px(5))
+        self.e_detalle = Campo(f, pista="Ej: 1 kg de molida, 2 chuletas", ancho=26, tam=12)
+        self.e_detalle.grid(row=2, column=1, sticky="we", padx=(0, 10), ipady=px(5))
+        self.e_monto = Campo(f, pista="$", ancho=10, tam=12)
+        self.e_monto.grid(row=2, column=2, sticky="we", padx=(0, 10), ipady=px(5))
         self.btn_anotar = Boton(f, "ANOTAR", self.anotar, "rojo")
         self.btn_anotar.grid(row=2, column=3, sticky="ns")
-        self.lbl_fecha_ok = tk.Label(f, text="", bg=BLANCO, fg=SUAVE, font=(FUENTE, 8))
-        self.lbl_fecha_ok.grid(row=3, column=0, sticky="w", pady=(3, 0))
-        self.lbl_ayuda_anotar = tk.Label(
-            f, text="Monto: 12500, 12.500 o 12 mil.   Enter para pasar al siguiente "
-                    "y para anotar.", bg=BLANCO, fg=PISTA, font=(FUENTE, 8), anchor="w")
-        self.lbl_ayuda_anotar.grid(row=3, column=1, columnspan=3, sticky="w", pady=(3, 0))
         f.columnconfigure(1, weight=1)
         self.e_fecha.bind("<KeyRelease>", self._revisar_fecha)
         self.e_fecha.bind("<FocusOut>", self._revisar_fecha, add="+")
@@ -682,19 +694,18 @@ class App(tk.Tk):
             b = Boton(barra, texto, lambda c=clave: self.cambiar_filtro(c), "claro", "chico")
             b.pack(side="left", padx=(0, 4))
             self.btn_filtros[clave] = b
-        tk.Label(barra, text="Clic en  ☐ Pagar  para marcar una compra como pagada",
+        tk.Label(barra, text="Clic en  ☐ Pagar  y queda pagada",
                  bg=BLANCO, fg=PISTA, font=(FUENTE, 9)).pack(side="right")
 
         marco = tk.Frame(p, bg=BLANCO)
         marco.pack(fill="both", expand=True, padx=12)
-        cols = ("chk", "fecha", "detalle", "monto", "abonado", "falta", "estado")
+        cols = ("chk", "fecha", "detalle", "monto", "falta", "estado")
         self.tv_compras = ttk.Treeview(marco, columns=cols, show="headings",
                                        selectmode="extended")
         for c, t, a, al in zip(cols,
-                               ("Pagado", "Fecha", "Qué llevó", "Valor", "Abonado",
-                                "Falta", "Estado"),
-                               (112, 96, 260, 96, 96, 96, 150),
-                               ("w", "center", "w", "e", "e", "e", "w")):
+                               ("Pagado", "Fecha", "Qué llevó", "Valor", "Falta", "Estado"),
+                               (100, 92, 190, 88, 88, 136),
+                               ("w", "center", "w", "e", "e", "w")):
             self.tv_compras.heading(c, text=t, anchor=al)
             self.tv_compras.column(c, width=px(a), minwidth=px(60), anchor=al,
                                    stretch=(c == "detalle"))
@@ -731,18 +742,19 @@ class App(tk.Tk):
 
     def _tab_pagos(self):
         p = tk.Frame(self.nb, bg=BLANCO)
-        self.nb.add(p, text="  Pagos recibidos  ")
+        self.nb.add(p, text="  Pagos y abonos  ")
         self.tab_pagos = p
-        tk.Label(p, text="Cada vez que el cliente entregó plata, y a qué compras se "
-                         "descontó.", bg=BLANCO, fg=SUAVE, font=(FUENTE, 9)).pack(
+        tk.Label(p, text="Cada vez que el cliente entregó plata (un abono o el pago "
+                         "completo), y a qué compras se descontó.", bg=BLANCO, fg=SUAVE,
+                 font=(FUENTE, 9)).pack(
             anchor="w", padx=12, pady=(10, 8))
         marco = tk.Frame(p, bg=BLANCO)
         marco.pack(fill="both", expand=True, padx=12)
         cols = ("fecha", "monto", "nota", "aplicado")
         self.tv_pagos = ttk.Treeview(marco, columns=cols, show="headings",
                                      selectmode="browse")
-        for c, t, a, al in zip(cols, ("Fecha", "Pagó", "Nota", "Se descontó de"),
-                               (96, 100, 160, 380), ("center", "e", "w", "w")):
+        for c, t, a, al in zip(cols, ("Fecha", "Entregó", "Nota", "Se descontó de"),
+                               (92, 90, 140, 260), ("center", "e", "w", "w")):
             self.tv_pagos.heading(c, text=t, anchor=al)
             self.tv_pagos.column(c, width=px(a), minwidth=px(60), anchor=al,
                                  stretch=(c == "aplicado"))
@@ -755,11 +767,10 @@ class App(tk.Tk):
         self.tv_pagos.bind("<Delete>", lambda e: self.deshacer_pago())
         abajo = tk.Frame(p, bg=BLANCO)
         abajo.pack(fill="x", padx=12, pady=10)
-        self.btn_deshacer = Boton(abajo, "Deshacer este pago", self.deshacer_pago,
-                                  "claro", "chico")
+        self.btn_deshacer = Boton(abajo, "Deshacer", self.deshacer_pago, "claro", "chico")
         self.btn_deshacer.pack(side="left")
-        tk.Label(abajo, text="Si un pago se anotó por error, deshacerlo deja otra vez "
-                             "pendientes las compras que cubría.",
+        tk.Label(abajo, text="Si se anotó por error, deshacerlo deja otra vez "
+                             "pendiente lo que cubría.",
                  bg=BLANCO, fg=PISTA, font=(FUENTE, 9)).pack(side="left", padx=10)
 
     # ---------------------------------------------------------- abrir/pintar
@@ -806,15 +817,15 @@ class App(tk.Tk):
         if cl["nota"]:
             datos.append(cl["nota"])
         if not datos:
-            datos.append("Sin teléfono ni nota. Puedes agregarlos en «Editar datos».")
+            datos.append("Sin teléfono ni nota. Puedes agregarlos con «Editar».")
         self.lbl_datos.config(text="   ·   ".join(datos))
         if cl["activo"]:
             self.lbl_archivado.pack_forget()
-            self.btn_quitar.config(text="Quitar de la lista")
+            self.btn_quitar.config(text="Quitar")
             self.btn_quitar.comando = self.quitar_cliente
         else:
             self.lbl_archivado.config(text="ARCHIVADO: no aparece en la lista de clientes")
-            self.lbl_archivado.pack(anchor="w", pady=(8, 0))
+            self.lbl_archivado.pack(anchor="w", pady=(6, 0))
             self.btn_quitar.config(text="Volver a la lista")
             self.btn_quitar.comando = self.reactivar_cliente
 
@@ -823,9 +834,8 @@ class App(tk.Tk):
             self.lbl_deuda.config(text=N.pesos(cl["deuda"]), fg=ROJO_OSCURO)
             n = cl["pendientes"]
             self.lbl_deuda_det.config(
-                text="%d compra%s sin pagar  ·  desde el %s (%s)" % (
-                    n, "" if n == 1 else "s", N.fecha_txt(cl["mas_antigua"])[:5],
-                    N.hace_cuanto(cl["mas_antigua"])))
+                text="%d compra%s sin pagar  ·  desde %s" % (
+                    n, "" if n == 1 else "s", N.hace_cuanto(cl["mas_antigua"])))
         else:
             self.lbl_debe_rot.config(text="CUENTA")
             self.lbl_deuda.config(text="AL DÍA", fg=VERDE)
@@ -856,22 +866,21 @@ class App(tk.Tk):
             if c["estado"] == N.PAGADA:
                 chk, estado = "  ☑  Pagada", "Pagada el %s" % N.fecha_txt(c["pagada_el"])[:5]
             elif c["estado"] == N.PARCIAL:
-                chk, estado = "  ☐  Pagar", "Abonada, falta %s" % N.pesos(c["falta"])
+                chk, estado = "  ☐  Pagar", "Abonó %s" % N.pesos(c["abonado"])
             else:
                 chk, estado = "  ☐  Pagar", "Pendiente"
             self.tv_compras.insert(
                 "", "end", iid=str(c["id"]), tags=(c["estado"],),
                 values=(chk, N.fecha_txt(c["fecha"]), c["detalle"] or "—",
-                        N.pesos(c["monto"]),
-                        N.pesos(c["abonado"]) if c["abonado"] else "",
-                        N.pesos(c["falta"]) if c["falta"] else "", estado))
+                        N.pesos(c["monto"]), N.pesos(c["falta"]) if c["falta"] else "",
+                        estado))
         if not lista:
             texto = {"pendientes": "No hay nada por pagar.",
                      "pagadas": "Todavía no hay compras pagadas.",
                      "todas": "Todavía no se le ha anotado nada. Usa la fila de "
                               "arriba para anotar lo que lleva."}[self.filtro]
             self.tv_compras.insert("", "end", iid="vacio", tags=("vacio",),
-                                   values=("", "", texto, "", "", "", ""))
+                                   values=("", "", texto, "", "", ""))
         quedan = [i for i in elegidas if self.tv_compras.exists(i) and i != "vacio"]
         if quedan:
             self.tv_compras.selection_set(quedan)
@@ -900,8 +909,8 @@ class App(tk.Tk):
                                          pg["nota"], ",  ".join(partes)))
         if not pagos:
             self.tv_pagos.insert("", "end", iid="vacio", tags=("vacio",),
-                                 values=("", "", "Todavía no hay pagos.", ""))
-        self.nb.tab(self.tab_pagos, text="  Pagos recibidos (%d)  " % len(pagos))
+                                 values=("", "", "Todavía no hay pagos ni abonos.", ""))
+        self.nb.tab(self.tab_pagos, text="  Pagos y abonos (%d)  " % len(pagos))
         self._botones_compra()
         self._botones_pago()
 
@@ -936,7 +945,7 @@ class App(tk.Tk):
         else:
             d = datetime.strptime(iso, "%Y-%m-%d")
             self.lbl_fecha_ok.config(
-                text="%s %s" % (N.DIAS[d.weekday()][:3], N.fecha_txt(iso)), fg=VERDE)
+                text="%s %s" % (N.DIAS[d.weekday()], N.fecha_corta(iso)), fg=VERDE)
         return iso
 
     def anotar(self):
@@ -1097,8 +1106,9 @@ class App(tk.Tk):
         if r:
             self.nb.select(self.tab_compras)
             self.recargar_todo()
-            self.avisar("Pago recibido de %s: %s. Ahora debe %s." % (
-                self._cl["nombre"], N.pesos(r["monto"]), N.pesos(self._cl["deuda"])))
+            self.avisar("Abono de %s: %s el %s. Ahora debe %s." % (
+                self._cl["nombre"], N.pesos(r["monto"]), N.fecha_corta(r["fecha"]),
+                N.pesos(self._cl["deuda"])))
 
     def pago_todo(self):
         if self.sel is None or self._cl["deuda"] <= 0 or self.grab_current() is not None:
@@ -1119,13 +1129,13 @@ class App(tk.Tk):
             return
         valores = self.tv_pagos.item(sel[0], "values")
         if not messagebox.askyesno(
-                "Deshacer pago", "¿Deshacer el pago del %s por %s?\n\nLas compras que "
+                "Deshacer", "¿Deshacer lo que entregó el %s (%s)?\n\nLas compras que "
                 "cubría vuelven a quedar pendientes." % (valores[0], valores[1]),
                 icon="warning"):
             return
         self.datos.borrar_pago(int(sel[0]))
         self.recargar_todo()
-        self.avisar("Pago deshecho. Ahora debe %s." % N.pesos(self._cl["deuda"]), AMBAR)
+        self.avisar("Deshecho. Ahora debe %s." % N.pesos(self._cl["deuda"]), AMBAR)
 
     # ------------------------------------------------------------- clientes
     def nuevo_cliente(self, nombre=""):
@@ -1339,17 +1349,18 @@ class App(tk.Tk):
             "2. ANOTAR\n"
             "Abre la hoja del cliente, escribe qué lleva y el monto, y aprieta Enter "
             "(o ANOTAR). La fecha, si la dejas vacía, es hoy.\n\n"
-            "3. PAGOS\n"
+            "3. PAGOS Y ABONOS\n"
             "• Clic en «☐ Pagar» de una compra: queda pagada.\n"
-            "• RECIBIR PAGO: el cliente entrega un monto y se descuenta desde la "
-            "compra más antigua. Sirve para abonos.\n"
+            "• ABONAR: el cliente entrega una parte (por ejemplo $30.000 de $45.000). "
+            "Se descuenta desde la compra más antigua y queda debiendo el resto. "
+            "La fecha puede ser «hoy», «martes» o «13».\n"
             "• Pagó todo: deja la cuenta al día de una vez.\n\n"
             "4. CORREGIR\n"
-            "«Volver a pendiente» quita un pago de una compra. En «Pagos recibidos» "
-            "puedes deshacer un pago completo.\n\n"
+            "«Volver a pendiente» quita un pago de una compra. En «Pagos y abonos» "
+            "puedes deshacer un abono o pago completo.\n\n"
             "5. COBRAR\n"
-            "«Estado de cuenta» lo abre listo para imprimir. «Mandar por WhatsApp» "
-            "arma el mensaje con el detalle.\n\n"
+            "«Imprimir cuenta» abre el estado de cuenta listo para imprimir. "
+            "«WhatsApp» arma el mensaje con el detalle.\n\n"
             "Se hace una copia de seguridad sola cada día (menú Archivo).")
 
     def acerca_de(self):
@@ -1497,32 +1508,44 @@ class DialogoCompra(Dialogo):
 
 
 class DialogoPago(Dialogo):
+    """Abono o pago: el cliente entrega plata y se descuenta de lo que debe."""
+
     def __init__(self, padre, cliente, datos):
-        Dialogo.__init__(self, padre, "Recibir pago", "Recibir pago", "verde")
+        Dialogo.__init__(self, padre, "Abonar", "Registrar abono", "verde")
         self.datos, self.cl = datos, cliente
         self.pend = sorted(datos.compras_de(cliente["id"], "pendientes"),
                            key=lambda c: (c["fecha"], c["id"]))
-        tk.Label(self.cuerpo, text="Pago de %s" % cliente["nombre"], bg=BLANCO, fg=TINTA,
+        tk.Label(self.cuerpo, text="Abono de %s" % cliente["nombre"], bg=BLANCO, fg=TINTA,
                  font=(FUENTE, 15, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
         tk.Label(self.cuerpo, text="Debe %s" % N.pesos(cliente["deuda"]), bg=BLANCO,
                  fg=ROJO_OSCURO, font=(FUENTE, 12, "bold")).grid(row=1, column=0,
                                                                  sticky="w")
-        self.e_monto = self.campo(1, "¿CUÁNTO ENTREGA?", "$", N.pesos(cliente["deuda"]),
-                                  16, ayuda="Puede ser una parte (un abono)")
-        self.e_fecha = self.campo(2, "FECHA", "hoy", "", 16, ayuda="Vacío = hoy")
+        self.e_monto = self.campo(1, "¿CUÁNTO ABONA?", "$", "", 16,
+                                  ayuda="Una parte, o todo lo que debe")
+        self.e_fecha = self.campo(2, "¿CUÁNDO?", "hoy", "", 16,
+                                  ayuda="Ej: hoy, ayer, martes, 13")
         self.e_nota = self.campo(3, "NOTA  (opcional)", "Ej: efectivo, transferencia")
         self.lbl_prev = tk.Label(self.cuerpo, text="", bg=BLANCO, fg=VERDE,
                                  font=(FUENTE, 10), justify="left", wraplength=px(420))
         self.lbl_prev.grid(row=9, column=0, columnspan=2, sticky="w", pady=(12, 0))
         self.e_monto.bind("<KeyRelease>", lambda e: self._previa())
+        self.e_fecha.bind("<KeyRelease>", lambda e: self._previa())
         self._previa()
 
     def _previa(self):
-        """Cuenta, antes de aceptar, que compras va a cubrir el pago."""
+        """Cuenta, antes de aceptar, cuando es y que compras va a cubrir el abono."""
+        fecha = N.leer_fecha(self.e_fecha.valor())
+        if fecha is None:
+            return self.lbl_prev.config(text="No entiendo la fecha. Escribe por ejemplo "
+                                             "hoy, martes, 13 o 13/10.", fg=ROJO)
+        larga = N.fecha_larga(fecha)
+        cuando = "Hoy" if fecha == date.today().isoformat() else \
+            "El " + larga[:larga.rfind(" de ")]
         monto = N.leer_monto(self.e_monto.valor())
         deuda = self.cl["deuda"]
         if not monto:
-            return self.lbl_prev.config(text="Escribe cuánto entrega.", fg=SUAVE)
+            return self.lbl_prev.config(text="%s. Escribe cuánto abona." % cuando,
+                                        fg=SUAVE)
         if monto > deuda:
             return self.lbl_prev.config(
                 text="Es más de lo que debe. Recibe %s y entrega el vuelto: %s."
@@ -1537,24 +1560,29 @@ class DialogoPago(Dialogo):
                 saldadas.append(c)
             else:
                 abonada = (c, parte)
-        partes = []
+        partes = ["%s abona %s." % (cuando, N.pesos(monto))]
         if saldadas:
             partes.append("Quedan pagadas %d compra%s (desde la más antigua)."
                           % (len(saldadas), "" if len(saldadas) == 1 else "s"))
         if abonada:
             partes.append("A «%s» del %s se le abonan %s." % (
-                abonada[0]["detalle"] or "compra", N.fecha_txt(abonada[0]["fecha"])[:5],
+                abonada[0]["detalle"] or "compra", N.fecha_corta(abonada[0]["fecha"]),
                 N.pesos(abonada[1])))
         partes.append("Queda al día." if monto == deuda else
-                      "Después del pago debe %s." % N.pesos(deuda - monto))
+                      "Después del abono debe %s." % N.pesos(deuda - monto))
         self.lbl_prev.config(text="\n".join(partes), fg=VERDE)
 
     def aceptar(self):
         fecha = N.leer_fecha(self.e_fecha.valor())
         if fecha is None:
-            raise ValueError("No entiendo la fecha. Escríbela así: 7/9 o déjala vacía.")
-        return self.datos.recibir_pago(self.cl["id"], self.e_monto.valor(), fecha,
-                                       self.e_nota.valor())
+            raise ValueError("No entiendo la fecha. Escríbela así: martes, 13 o 13/10, "
+                             "o déjala vacía para hoy.")
+        if fecha > date.today().isoformat():
+            raise ValueError("Esa fecha todavía no llega.")
+        r = self.datos.recibir_pago(self.cl["id"], self.e_monto.valor(), fecha,
+                                    self.e_nota.valor())
+        r["fecha"] = fecha
+        return r
 
 
 # ==================================================================== inicio

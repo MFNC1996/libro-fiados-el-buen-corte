@@ -94,26 +94,57 @@ def leer_fecha(texto, hoy=None):
         7               -> dia 7 de este mes (o del anterior, si aun no llega)
         7/9  7-9  7.9   -> 7 de septiembre (del anio pasado si aun no llega)
         7/9/26  7/9/2026  2026-09-07
+        7 de septiembre -> igual que 7/9
+        martes          -> el ultimo martes (hoy, si hoy es martes)
+        martes 13       -> el ultimo martes 13 que ya paso
 
     Devuelve None si de verdad no se entiende.
     """
     hoy = hoy or date.today()
-    t = str(texto or "").strip().lower()
+    t = _sin_tildes(texto).strip().replace(",", " ")
     if t in ("", "hoy"):
         return hoy.isoformat()
     if t == "ayer":
         return (hoy - timedelta(days=1)).isoformat()
-    if t in ("anteayer", "antes de ayer"):
+    if t in ("anteayer", "antes de ayer", "antier"):
         return (hoy - timedelta(days=2)).isoformat()
     m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", t)
     if m:
         a, mes, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
         return _fecha_o_none(a, mes, d)
+
+    # Palabras: el dia de la semana se aparta, y el mes pasa a numero.
+    dia_semana = None
+    palabras = []
+    for p in t.split():
+        if p in _DIAS_SIN_TILDE:
+            dia_semana = _DIAS_SIN_TILDE.index(p)
+        elif p in MESES:
+            palabras += ["/", str(MESES.index(p) + 1)]
+        elif p not in ("el", "de", "del", "dia", "pasado"):
+            palabras.append(p)
+    t = " ".join(palabras)
+
+    if not t.strip():
+        if dia_semana is None:
+            return None
+        atras = (hoy.weekday() - dia_semana) % 7          # hoy mismo cuenta
+        return (hoy - timedelta(days=atras)).isoformat()
+
     partes = [p for p in re.split(r"[/\-. ]+", t) if p]
     if not partes or len(partes) > 3 or not all(p.isdigit() for p in partes):
         return None
     nums = [int(p) for p in partes]
     if len(nums) == 1:
+        if dia_semana is not None:
+            # "martes 13": el ultimo mes en que el 13 cayo martes.
+            a, mes = hoy.year, hoy.month
+            for _ in range(15):
+                f = _fecha_o_none(a, mes, nums[0])
+                if f and f <= hoy.isoformat() and \
+                        date(a, mes, nums[0]).weekday() == dia_semana:
+                    return f
+                a, mes = (a, mes - 1) if mes > 1 else (a - 1, 12)
         f = _fecha_o_none(hoy.year, hoy.month, nums[0])
         if f and f > hoy.isoformat():            # el 28 escrito un dia 3: mes pasado
             ant = hoy.replace(day=1) - timedelta(days=1)
@@ -141,6 +172,16 @@ def fecha_txt(iso):
         return datetime.strptime(iso, "%Y-%m-%d").strftime("%d/%m/%Y")
     except (TypeError, ValueError):
         return iso or ""
+
+
+def fecha_corta(iso, hoy=None):
+    """'2026-09-07' -> '07/09' si es de este anio; si no, '07/09/25'."""
+    hoy = hoy or date.today()
+    try:
+        d = datetime.strptime(iso, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return iso or ""
+    return d.strftime("%d/%m" if d.year == hoy.year else "%d/%m/%y")
 
 
 def fecha_larga(iso):
@@ -705,6 +746,7 @@ def _monto_valido(monto):
 
 
 _TILDES = str.maketrans("áéíóúüñÁÉÍÓÚÜÑ", "aeiouunaeiouun")
+_DIAS_SIN_TILDE = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 
 
 def _sin_tildes(texto):
