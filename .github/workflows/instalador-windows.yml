@@ -150,8 +150,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.0
-          name: Libro de Fiados 1.2.0
+          tag_name: v1.2.1
+          name: Libro de Fiados 1.2.1
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
@@ -160,11 +160,12 @@ jobs:
 
             ### Novedades de la 1.2
 
+            - Al escribir el monto, los puntos de los miles se van marcando
+              solos: 1 - 10 - 100 - 1.000 - 10.000, sin contar ceros.
             - Pantalla de carga al abrir: el logo al centro, el nombre del local
               y una barra que avanza mientras se prepara todo.
             - Las casillas de monto solo aceptan numeros (y el punto de los
-              miles); al salir de la casilla el monto queda ordenado: 12500 ->
-              12.500. El telefono solo acepta numeros, espacios, + y guion.
+              miles). El telefono solo acepta numeros, espacios, + y guion.
               Nombre, detalle y nota tienen un largo maximo.
             - Una sola ventana: si se abre el programa dos veces, no se abre
               otro; se trae al frente el que ya estaba. Probado en Windows.

@@ -26,10 +26,8 @@ import estado_cuenta
 # Paleta del logo del local
 ROJO = "#C8202D"          # las letras
 ROJO_OSCURO = "#A60D2B"   # las cintas
-ROJO_CLARO = "#FBE8E9"
 VERDE = "#1F7A3D"         # el anillo
 VERDE_OSCURO = "#165E2E"
-VERDE_CLARO = "#E3F1E7"
 AMBAR = "#8A5A00"
 AMBAR_CLARO = "#FBF0DC"
 TINTA = "#1B1715"
@@ -39,12 +37,11 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
 FUENTE = "Segoe UI" if sys.platform.startswith("win") else "Helvetica"
-MONO = "Consolas" if sys.platform.startswith("win") else "Menlo"
 
 # Cuantos pixeles reales es un pixel "de diseno". En Windows con la pantalla
 # al 125 % o 150 % las letras crecen solas; esto hace crecer tambien anchos
@@ -124,8 +121,8 @@ class Campo(tk.Entry):
     """
     Casilla de texto plana, con una pista gris cuando esta vacia.
 
-    tipo="monto": solo deja escribir numeros (y el punto de los miles); al
-    salir de la casilla el monto se ordena con puntos: 12500 -> 12.500.
+    tipo="monto": solo deja escribir numeros, y va marcando los puntos de los
+    miles mientras se escribe: 1 - 10 - 100 - 1.000 - 10.000.
     tipo="telefono": numeros, espacios, + y guion.
     Cualquier otro: texto libre, pero con un largo maximo.
     """
@@ -148,7 +145,30 @@ class Campo(tk.Entry):
         self.config(validate="key", validatecommand=(self.register(self._valido), "%P"))
         self.bind("<FocusIn>", self._entrar, add="+")
         self.bind("<FocusOut>", self._salir, add="+")
+        if tipo == "monto":
+            # Los puntos se van marcando solos: 10 -> 100 -> 1.000 -> 10.000,
+            # asi no hay que ir contando ceros.
+            self.bind("<KeyRelease>", self._marcar_miles, add="+")
         self._salir()
+
+    def _marcar_miles(self, evento=None):
+        if self._con_pista or (evento is not None and
+                               evento.keysym in ("Left", "Right", "Home", "End", "Tab")):
+            return
+        texto = tk.Entry.get(self)
+        antes = sum(1 for c in texto[:self.index("insert")] if c.isdigit())
+        digitos = "".join(c for c in texto if c.isdigit()).lstrip("0")
+        nuevo = "{:,}".format(int(digitos)).replace(",", ".") if digitos else ""
+        if nuevo == texto:
+            return
+        self._sin_filtro(lambda: (self.delete(0, "end"), self.insert(0, nuevo)))
+        # El cursor vuelve a quedar despues de la misma cantidad de numeros.
+        i, contados = 0, 0
+        while i < len(nuevo) and contados < antes:
+            if nuevo[i].isdigit():
+                contados += 1
+            i += 1
+        self.icursor(i)
 
     def _valido(self, nuevo):
         """Tk pregunta antes de cada tecla (o pegado) si el texto nuevo sirve."""
@@ -191,10 +211,24 @@ class Campo(tk.Entry):
         return "" if self._con_pista else tk.Entry.get(self).strip()
 
     def poner(self, texto):
+        """Escribe un valor como si lo hubiera escrito la persona (mismo filtro).
+
+        Lo unico que no se aplica es el largo maximo: un dato guardado de antes
+        se muestra completo aunque hoy el maximo sea mas corto.
+        """
         self._entrar()
-        self.delete(0, "end")
-        self.insert(0, texto)
-        if self.focus_get() is not self:
+        largo = self.largo
+        self.largo = max(largo, len(str(texto)))
+        try:
+            self.delete(0, "end")
+            self.insert(0, str(texto))
+        finally:
+            self.largo = largo
+        try:
+            tiene_el_foco = self.focus_get() is self
+        except (KeyError, tk.TclError):
+            tiene_el_foco = False        # el foco esta en un aviso de Windows
+        if not tiene_el_foco:
             self._salir()
 
     def limpiar(self):
@@ -794,7 +828,8 @@ class App(tk.Tk):
         tk.Label(titulo, text="ANOTAR LO QUE LLEVA", bg=BLANCO, fg=ROJO,
                  font=(FUENTE, 9, "bold")).pack(side="left")
         self.lbl_ayuda_anotar = tk.Label(
-            titulo, text="Enter pasa al siguiente y anota   ·   Monto: solo números, ej. 12500",
+            titulo, text="Enter pasa al siguiente y anota   ·   Los puntos de los miles "
+                         "se marcan solos",
             bg=BLANCO, fg=PISTA, font=(FUENTE, 8))
         self.lbl_ayuda_anotar.pack(side="right")
         cf = tk.Frame(f, bg=BLANCO)
@@ -851,7 +886,7 @@ class App(tk.Tk):
         self.tv_compras = ttk.Treeview(marco, columns=cols, show="headings",
                                        selectmode="extended")
         for c, t, a, al in zip(cols,
-                               ("Pagado", "Fecha", "Qué llevó", "Valor", "Falta", "Estado"),
+                               ("Pagado", "Fecha", "Qué llevó", "Monto", "Falta", "Estado"),
                                (100, 92, 190, 88, 88, 136),
                                ("w", "center", "w", "e", "e", "w")):
             self.tv_compras.heading(c, text=t, anchor=al)
@@ -988,7 +1023,7 @@ class App(tk.Tk):
             self.lbl_debe_rot.config(text="CUENTA")
             self.lbl_deuda.config(text="AL DÍA", fg=VERDE)
             self.lbl_deuda_det.config(
-                text="Último pago: %s" % N.fecha_txt(cl["ultimo_pago"])
+                text="Último pago: %s" % N.fecha_corta(cl["ultimo_pago"])
                 if cl["ultimo_pago"] else "No debe nada")
         self.btn_recibir.activar(cl["deuda"] > 0)
         self.btn_pagar_todo.activar(cl["deuda"] > 0)
@@ -1012,14 +1047,14 @@ class App(tk.Tk):
         self.tv_compras.delete(*self.tv_compras.get_children())
         for c in lista:
             if c["estado"] == N.PAGADA:
-                chk, estado = "  ☑  Pagada", "Pagada el %s" % N.fecha_txt(c["pagada_el"])[:5]
+                chk, estado = "  ☑  Pagada", "Pagada el %s" % N.fecha_corta(c["pagada_el"])
             elif c["estado"] == N.PARCIAL:
                 chk, estado = "  ☐  Pagar", "Abonó %s" % N.pesos(c["abonado"])
             else:
                 chk, estado = "  ☐  Pagar", "Pendiente"
             self.tv_compras.insert(
                 "", "end", iid=str(c["id"]), tags=(c["estado"],),
-                values=(chk, N.fecha_txt(c["fecha"]), c["detalle"] or "—",
+                values=(chk, N.fecha_corta(c["fecha"]), c["detalle"] or "—",
                         N.pesos(c["monto"]), N.pesos(c["falta"]) if c["falta"] else "",
                         estado))
         if not lista:
@@ -1048,12 +1083,12 @@ class App(tk.Tk):
             for a in pg["aplicaciones"]:
                 det = a["detalle"] or "compra"
                 if a["monto"] < a["total"]:
-                    partes.append("%s %s (abono %s)" % (N.fecha_txt(a["fecha"])[:5], det,
+                    partes.append("%s %s (abono %s)" % (N.fecha_corta(a["fecha"]), det,
                                                          N.pesos(a["monto"])))
                 else:
-                    partes.append("%s %s" % (N.fecha_txt(a["fecha"])[:5], det))
+                    partes.append("%s %s" % (N.fecha_corta(a["fecha"]), det))
             self.tv_pagos.insert("", "end", iid=str(pg["id"]),
-                                 values=(N.fecha_txt(pg["fecha"]), N.pesos(pg["monto"]),
+                                 values=(N.fecha_corta(pg["fecha"]), N.pesos(pg["monto"]),
                                          pg["nota"], ",  ".join(partes)))
         if not pagos:
             self.tv_pagos.insert("", "end", iid="vacio", tags=("vacio",),
