@@ -313,14 +313,21 @@ class Sincronizador(threading.Thread):
     def _bajar(self, datos, nube, local_id):
         total = 0
         for tabla in N.Datos.TABLAS:
-            desde = datos.config("desde_" + tabla)
-            filas = nube.bajar(tabla, local_id, _con_solape(desde))
-            if not filas:
-                continue
-            total += datos.guardar_de_la_nube(tabla, filas)
-            ultima = max(f.get("actualizado", "") for f in filas)
-            if ultima:
-                datos.guardar_config("desde_" + tabla, ultima)
+            # Se pide por tandas: la primera vez, o despues de estar mucho rato
+            # sin internet, puede haber mas filas que las que entran en una.
+            for _ in range(50):
+                desde = datos.config("desde_" + tabla)
+                filas = nube.bajar(tabla, local_id, _con_solape(desde))
+                if not filas:
+                    break
+                total += datos.guardar_de_la_nube(tabla, filas)
+                ultima = max(f.get("actualizado", "") for f in filas)
+                if ultima and ultima != desde:
+                    datos.guardar_config("desde_" + tabla, ultima)
+                else:
+                    break
+                if len(filas) < 500:
+                    break
         return total
 
 

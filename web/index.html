@@ -11,7 +11,7 @@
 <link rel="icon" href="icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Libro de Fiados">
-<link rel="stylesheet" href="estilo.css?v=1">
+<link rel="stylesheet" href="estilo.css?v=2">
 </head>
 <body>
 
@@ -56,12 +56,21 @@
       <div class="buscador">
         <button class="boton rojo ancho" id="btn-nuevo">+&nbsp; Nuevo cliente</button>
       </div>
-      <div class="buscador" style="padding-bottom:8px">
-        <label style="color:var(--suave); font-size:13px">
-          <input type="checkbox" id="solo-deben"> Solo los que deben
-        </label>
+      <div class="opciones">
+        <label><input type="checkbox" id="solo-deben"> Solo los que deben</label>
+        <label><input type="checkbox" id="ver-archivados"> Mostrar archivados</label>
       </div>
-      <div class="lista" id="lista"></div>
+      <p class="resumen" id="resumen"></p>
+      <div class="lista" id="lista"><p class="vacio">Cargando el libro...</p></div>
+      <div class="instalar oculto" id="caja-instalar">
+        <img src="logo.png" alt="">
+        <div>
+          <b>Tenlo a mano en el celular</b>
+          <small>Se agrega a la pantalla de inicio, con el logo del local, y se abre
+                 como cualquier aplicación.</small>
+        </div>
+        <button class="boton rojo chico" id="btn-instalar">Instalar</button>
+      </div>
     </section>
 
     <!-- ---------------------------- hoja del cliente ---------------------------- -->
@@ -125,6 +134,7 @@
 <div id="ventanita"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="libro.js?v=1"></script>
+<script src="cuentas.js?v=2"></script>
+<script src="libro.js?v=2"></script>
 </body>
 </html>

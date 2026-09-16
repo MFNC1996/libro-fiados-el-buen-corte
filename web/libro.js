@@ -22,165 +22,44 @@ let abierto = null;                       // cliente abierto
 let filtro = "pendientes";
 let pestana = "compras";
 let ocupado = false;                      // hay una ventanita abierta
+let firma = "";                           // para no redibujar si nada cambio
+let instalador = null;                    // el aviso del celular para instalarla
 
-/* ============================================================ formatos */
-function pesos(n) {
-  n = Math.round(Number(n) || 0);
-  const signo = n < 0 ? "-" : "";
-  return signo + "$" + Math.abs(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-}
-
-function leerMonto(texto) {
-  const t = String(texto || "").replace(/[^\d]/g, "");
-  const v = parseInt(t, 10);
-  return v > 0 ? v : null;
-}
-
-const DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
-const DIAS_SIMPLE = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
-const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
-               "septiembre", "octubre", "noviembre", "diciembre"];
-
-const sinTildes = (t) => String(t || "").toLowerCase()
-  .replace(/á/g, "a").replace(/é/g, "e").replace(/í/g, "i").replace(/ó/g, "o")
-  .replace(/ú/g, "u").replace(/ü/g, "u").replace(/ñ/g, "n");
-
-function iso(d) {
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" +
-         String(d.getDate()).padStart(2, "0");
-}
-const hoyISO = () => iso(new Date());
-
-function fechaValida(a, m, d) {
-  const f = new Date(a, m - 1, d);
-  return (f.getFullYear() === a && f.getMonth() === m - 1 && f.getDate() === d) ? iso(f) : null;
-}
-
-/* Entiende la fecha escrita como venga, igual que el programa del computador. */
-function leerFecha(texto, hoy) {
-  hoy = hoy || new Date();
-  let t = sinTildes(texto).trim().replace(/,/g, " ");
-  if (t === "" || t === "hoy") return iso(hoy);
-  const menos = (n) => { const d = new Date(hoy); d.setDate(d.getDate() - n); return iso(d); };
-  if (t === "ayer") return menos(1);
-  if (t === "anteayer" || t === "antier") return menos(2);
-  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) return fechaValida(+m[1], +m[2], +m[3]);
-
-  let diaSemana = null;
-  const palabras = [];
-  t.split(/\s+/).forEach((p) => {
-    if (DIAS_SIMPLE.indexOf(p) >= 0) diaSemana = DIAS_SIMPLE.indexOf(p);
-    else if (MESES.indexOf(sinTildes(p)) >= 0) palabras.push("/", String(MESES.indexOf(sinTildes(p)) + 1));
-    else if (["el", "de", "del", "dia", "pasado"].indexOf(p) < 0) palabras.push(p);
-  });
-  t = palabras.join(" ").trim();
-
-  if (!t) {
-    if (diaSemana === null) return null;
-    const hoyDia = (hoy.getDay() + 6) % 7;            // lunes = 0
-    return menos((hoyDia - diaSemana + 7) % 7);
-  }
-  const partes = t.split(/[/\-. ]+/).filter((p) => p !== "");
-  if (!partes.length || partes.length > 3 || partes.some((p) => !/^\d+$/.test(p))) return null;
-  const n = partes.map(Number);
-  if (n.length === 1) {
-    if (diaSemana !== null) {                          // "martes 13"
-      let a = hoy.getFullYear(), mes = hoy.getMonth() + 1;
-      for (let i = 0; i < 15; i++) {
-        const f = fechaValida(a, mes, n[0]);
-        if (f && f <= iso(hoy) && (new Date(a, mes - 1, n[0]).getDay() + 6) % 7 === diaSemana) return f;
-        if (mes > 1) { mes--; } else { mes = 12; a--; }
-      }
-    }
-    let f = fechaValida(hoy.getFullYear(), hoy.getMonth() + 1, n[0]);
-    if (f && f > iso(hoy)) {
-      const ant = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
-      f = fechaValida(ant.getFullYear(), ant.getMonth() + 1, n[0]);
-    }
-    return f;
-  }
-  if (n.length === 2) {
-    let f = fechaValida(hoy.getFullYear(), n[1], n[0]);
-    if (f && f > iso(hoy)) f = fechaValida(hoy.getFullYear() - 1, n[1], n[0]);
-    return f;
-  }
-  return fechaValida(n[2] < 100 ? 2000 + n[2] : n[2], n[1], n[0]);
-}
-
-function fechaCorta(f) {
-  if (!f) return "";
-  const p = String(f).slice(0, 10).split("-");
-  return p[2] + "/" + p[1] + (p[0] === String(new Date().getFullYear()) ? "" : "/" + p[0].slice(2));
-}
-function fechaTxt(f) {
-  if (!f) return "";
-  const p = String(f).slice(0, 10).split("-");
-  return p[2] + "/" + p[1] + "/" + p[0];
-}
-function haceCuanto(f) {
-  if (!f) return "";
-  const dias = Math.round((new Date(hoyISO()) - new Date(String(f).slice(0, 10))) / 86400000);
-  if (dias <= 0) return "hoy";
-  if (dias === 1) return "ayer";
-  if (dias < 60) return "hace " + dias + " días";
-  return "hace " + Math.floor(dias / 30) + " meses";
-}
-function diaYFecha(f) {
-  const d = new Date(String(f).slice(0, 10) + "T12:00:00");
-  return DIAS[(d.getDay() + 6) % 7] + " " + fechaCorta(f);
-}
-function telefonoWhatsapp(tel) {
-  const d = String(tel || "").replace(/\D/g, "");
-  if (d.length === 8) return "569" + d;
-  if (d.length === 9 && d[0] === "9") return "56" + d;
-  if (d.length === 11 && d.slice(0, 2) === "56") return d;
-  return null;
-}
-const escapar = (t) => String(t == null ? "" : t)
-  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+/* Las cuentas viven en cuentas.js, probadas aparte con node. */
+const C = window.Cuentas;
+const pesos = C.pesos, leerMonto = C.leerMonto, leerFecha = C.leerFecha;
+const fechaCorta = C.fechaCorta, fechaTxt = C.fechaTxt, haceCuanto = C.haceCuanto;
+const sinTildes = C.sinTildes, escapar = C.escapar, hoyISO = C.hoyISO;
+const telefonoWhatsapp = C.telefonoWhatsapp;
 
 /* ======================================================== los datos */
+/*
+ * El servidor entrega como maximo 1000 filas por consulta, asi que se pide por
+ * tandas hasta que no venga nada mas. Con un libro de anios, igual se trae todo.
+ */
+async function traerTodo(tabla) {
+  const TANDA = 1000;
+  let desde = 0, filas = [];
+  for (;;) {
+    const { data, error } = await sb.from(tabla).select("*")
+      .eq("local_id", LOCAL_ID).eq("borrado", false)
+      .order("creado", { ascending: true }).range(desde, desde + TANDA - 1);
+    if (error) throw error;
+    filas = filas.concat(data);
+    if (data.length < TANDA) return filas;
+    desde += TANDA;
+    if (desde > 100000) return filas;              // tope de seguridad
+  }
+}
+
 async function cargar() {
-  const pedir = (tabla) => sb.from(tabla).select("*").eq("local_id", LOCAL_ID)
-                             .eq("borrado", false).limit(5000);
-  const [cl, co, pa, ap] = await Promise.all(
-    ["clientes", "compras", "pagos", "aplicaciones"].map(pedir));
-  for (const r of [cl, co, pa, ap]) if (r.error) throw r.error;
-  D = { clientes: cl.data, compras: co.data, pagos: pa.data, aplicaciones: ap.data };
+  const [clientes, compras, pagos, aplicaciones] = await Promise.all(
+    ["clientes", "compras", "pagos", "aplicaciones"].map(traerTodo));
+  D = { clientes, compras, pagos, aplicaciones };
   recalcular();
 }
 
-function recalcular() {
-  const abonado = {}, pagadaEl = {};
-  const pagoPorId = {};
-  D.pagos.forEach((p) => { pagoPorId[p.id] = p; });
-  D.aplicaciones.forEach((a) => {
-    abonado[a.compra_id] = (abonado[a.compra_id] || 0) + a.monto;
-    const p = pagoPorId[a.pago_id];
-    if (p && (!pagadaEl[a.compra_id] || p.fecha > pagadaEl[a.compra_id])) {
-      pagadaEl[a.compra_id] = p.fecha;
-    }
-  });
-  D.compras.forEach((c) => {
-    c.abonado = abonado[c.id] || 0;
-    c.falta = c.monto - c.abonado;
-    c.estado = c.falta <= 0 ? "pagada" : (c.abonado > 0 ? "parcial" : "pendiente");
-    c.pagada_el = c.estado === "pagada" ? pagadaEl[c.id] : null;
-  });
-  D.clientes.forEach((cl) => {
-    const suyas = D.compras.filter((c) => c.cliente_id === cl.id);
-    const pend = suyas.filter((c) => c.falta > 0);
-    cl.deuda = pend.reduce((s, c) => s + c.falta, 0);
-    cl.pendientes = pend.length;
-    cl.mas_antigua = pend.length ? pend.map((c) => c.fecha).sort()[0] : null;
-    const pagos = D.pagos.filter((p) => p.cliente_id === cl.id).map((p) => p.fecha).sort();
-    cl.ultimo_pago = pagos.length ? pagos[pagos.length - 1] : null;
-  });
-  D.clientes.sort((a, b) => sinTildes(a.nombre).localeCompare(sinTildes(b.nombre)));
-  D.compras.sort((a, b) => (b.fecha + b.creado).localeCompare(a.fecha + a.creado));
-  D.pagos.sort((a, b) => (b.fecha + b.creado).localeCompare(a.fecha + a.creado));
-}
+const recalcular = () => C.recalcular(D);
 
 const nuevoId = () => (crypto.randomUUID ? crypto.randomUUID() :
   "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -230,22 +109,18 @@ async function marcarPendiente(compra) {
 
 /* El abono se descuenta desde la compra mas antigua, igual que en el computador. */
 async function recibirPago(cliente, monto, fecha) {
-  const pend = D.compras.filter((c) => c.cliente_id === cliente.id && c.falta > 0)
-                        .sort((a, b) => (a.fecha + a.creado).localeCompare(b.fecha + b.creado));
+  const pend = D.compras.filter((c) => c.cliente_id === cliente.id && c.falta > 0);
   const deuda = pend.reduce((s, c) => s + c.falta, 0);
   if (deuda <= 0) throw new Error("No hay nada pendiente que pagar.");
   if (monto > deuda) throw new Error("Está pagando " + pesos(monto) + ", pero debe " +
     pesos(deuda) + ". El libro no guarda saldo a favor.");
+  const partes = C.repartir(pend, monto);
   const pago = nuevoId();
   let { error } = await sb.from("pagos").insert({
     id: pago, local_id: LOCAL_ID, cliente_id: cliente.id, fecha: fecha, monto: monto, nota: "" });
   if (error) throw error;
-  let resto = monto;
-  for (const c of pend) {
-    if (resto <= 0) break;
-    const parte = Math.min(resto, c.falta);
-    await insertar("aplicaciones", { pago_id: pago, compra_id: c.id, monto: parte });
-    resto -= parte;
+  for (const p of partes) {
+    await insertar("aplicaciones", { pago_id: pago, compra_id: p.compra.id, monto: p.monto });
   }
 }
 
@@ -266,8 +141,11 @@ function mostrarAviso(texto, malo) {
 }
 
 function pintar() {
-  const total = D.clientes.reduce((s, c) => s + c.deuda, 0);
+  // Solo los que estan en la lista, igual que en el computador.
+  const total = D.clientes.filter((c) => c.activo !== false)
+                          .reduce((s, c) => s + c.deuda, 0);
   $("por-cobrar").textContent = pesos(total);
+  pintarResumen();
   pintarLista();
   if (abierto) {
     const cl = D.clientes.find((c) => c.id === abierto);
@@ -275,10 +153,25 @@ function pintar() {
   }
 }
 
+/* Lo mismo que muestran las tarjetas del resumen en el computador. */
+function pintarResumen() {
+  const mes = hoyISO().slice(0, 7);
+  const delMes = (filas) => filas.filter((f) => String(f.fecha).slice(0, 7) === mes)
+                                 .reduce((s, f) => s + f.monto, 0);
+  const enLista = D.clientes.filter((c) => c.activo !== false);
+  const deben = enLista.filter((c) => c.deuda > 0).length;
+  const activos = enLista.length;
+  $("resumen").innerHTML =
+    "Deben <b>" + deben + "</b> de " + activos + " clientes" +
+    "  ·  fiado este mes <b>" + pesos(delMes(D.compras)) + "</b>" +
+    "  ·  cobrado <b>" + pesos(delMes(D.pagos)) + "</b>";
+}
+
 function pintarLista() {
   const busca = sinTildes($("buscar").value).trim();
   const soloDeben = $("solo-deben").checked;
-  let lista = D.clientes.filter((c) => c.activo !== false);
+  const verArchivados = $("ver-archivados").checked;
+  let lista = verArchivados ? D.clientes.slice() : D.clientes.filter((c) => c.activo !== false);
   if (soloDeben) lista = lista.filter((c) => c.deuda > 0);
   if (busca) lista = lista.filter((c) => sinTildes(c.nombre).indexOf(busca) >= 0 ||
                                           sinTildes(c.telefono).indexOf(busca) >= 0);
@@ -293,8 +186,10 @@ function pintarLista() {
       ? c.pendientes + (c.pendientes === 1 ? " compra sin pagar" : " compras sin pagar") +
         " · desde " + haceCuanto(c.mas_antigua)
       : (c.ultimo_pago ? "Último pago: " + fechaCorta(c.ultimo_pago) : "No debe nada");
+    const archivado = c.activo === false ? " (archivado)" : "";
     return '<button class="cliente" data-cliente="' + c.id + '">' +
-      '<span class="quien"><b>' + escapar(c.nombre) + "</b><small>" + escapar(det) + "</small></span>" +
+      '<span class="quien"><b>' + escapar(c.nombre) + archivado + "</b><small>" +
+      escapar(det) + "</small></span>" +
       '<span class="debe' + (c.deuda > 0 ? '"' : ' aldia"') + ">" +
       (c.deuda > 0 ? pesos(c.deuda) : "al día") + "</span></button>";
   }).join("");
@@ -332,6 +227,8 @@ function pintarHoja(cl) {
     b.textContent = base + "  " + cuenta[b.dataset.filtro];
     b.classList.toggle("activa", b.dataset.filtro === filtro);
   });
+  $("p-compras").textContent = cuenta.pendientes
+    ? "Compras (" + cuenta.pendientes + " por pagar)" : "Compras";
   const ver = filtro === "todas" ? suyas
     : suyas.filter((c) => (filtro === "pagadas") === (c.estado === "pagada"));
   $("compras").innerHTML = ver.length ? ver.map((c) => {
@@ -368,7 +265,6 @@ function pintarHoja(cl) {
 function abrirCliente(id) {
   abierto = id;
   filtro = "pendientes";
-  $("panel").classList.add("chico");
   if (window.innerWidth < 900) $("panel").classList.add("oculto");
   $("hoja").classList.remove("oculto");
   window.scrollTo(0, 0);
@@ -399,7 +295,7 @@ function ventanita(titulo, subtitulo, cuerpo, alAceptar, textoOk, estiloOk) {
     try {
       await alAceptar();
       cerrar();
-      await refrescar();
+      await refrescar(false);
     } catch (e) {
       $("v-error").textContent = e.message || String(e);
       $("v-error").classList.remove("oculto");
@@ -535,7 +431,7 @@ function tocarCompra(c) {
     $("ventanita").innerHTML = "";
     ocupado = false;
     mostrarAviso("Compra borrada.");
-    await refrescar();
+    await refrescar(false);
   };
   if (pagada) $("v-ok").textContent = "Guardar";
 }
@@ -560,7 +456,7 @@ async function cambiarCheck(c) {
   try {
     const cobrado = await marcarPagada(c);
     mostrarAviso("Pagada: " + (c.detalle || "compra") + " (" + pesos(cobrado) + ")");
-    await refrescar();
+    await refrescar(false);
   } catch (e) {
     mostrarAviso(e.message || String(e), true);
   }
@@ -583,7 +479,7 @@ async function anotarDesdeLaFila() {
     $("a-monto").value = "";
     mostrarAviso("Anotado a " + cl.nombre + ": " + (detalle.trim() || "compra") + "  " +
                  pesos(monto));
-    await refrescar();
+    await refrescar(false);
     $("a-detalle").focus();
   } catch (e) {
     mostrarAviso(e.message || String(e), true);
@@ -609,13 +505,80 @@ function marcarMilesEn(input) {
 }
 
 /* ========================================================== arranque */
-async function refrescar() {
+async function refrescar(forzar) {
   try {
     await cargar();
-    pintar();
   } catch (e) {
-    mostrarAviso("No se pudo leer: " + (e.message || e), true);
+    return mostrarAviso(navigator.onLine === false
+      ? "Sin internet: lo que se ve puede estar atrasado."
+      : "No se pudo leer: " + (e.message || e), true);
   }
+  // Solo se vuelve a dibujar si de verdad cambio algo, para que la pantalla no
+  // parpadee ni se mueva de lugar mientras el dueno esta mirando.
+  const ahora = JSON.stringify([D.clientes.length, D.compras.length, D.pagos.length,
+    D.aplicaciones.length,
+    D.clientes.map((c) => c.id + c.nombre + c.deuda + c.activo).join(),
+    D.compras.map((c) => c.id + c.monto + c.falta + c.detalle + c.fecha).join(),
+    D.pagos.map((p) => p.id + p.monto + p.fecha).join()]);
+  if (forzar !== false && ahora === firma) return;
+  firma = ahora;
+  pintar();
+}
+
+/* -------------------------------------------- acceso directo en el celular */
+function yaEstaInstalada() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+         window.navigator.standalone === true;
+}
+
+function esiPhone() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function prepararInstalacion() {
+  const caja = $("caja-instalar");
+  const mostrar = () => caja.classList.remove("oculto");
+  if (yaEstaInstalada()) return;                 // ya la tiene: no se molesta
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    instalador = e;                              // Android: se instala de una
+    mostrar();
+  });
+  if (esiPhone()) mostrar();                     // iPhone: se explica como
+  $("btn-instalar").addEventListener("click", async () => {
+    if (instalador) {
+      instalador.prompt();
+      const r = await instalador.userChoice;
+      instalador = null;
+      if (r && r.outcome === "accepted") {
+        caja.classList.add("oculto");
+        mostrarAviso("Listo: el libro quedó en la pantalla de inicio.");
+      }
+      return;
+    }
+    comoInstalarla();
+  });
+  window.addEventListener("appinstalled", () => {
+    caja.classList.add("oculto");
+    mostrarAviso("Listo: el libro quedó en la pantalla de inicio.");
+  });
+}
+
+function comoInstalarla() {
+  const iphone = esiPhone();
+  ventanita("Tenerlo en la pantalla de inicio",
+    "Queda con el logo del local, igual que cualquier otra aplicación.",
+    '<ol class="pasos">' + (iphone
+      ? "<li>Abajo, toca el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba).</li>" +
+        "<li>Desliza y elige <b>Agregar a pantalla de inicio</b>.</li>" +
+        "<li>Toca <b>Agregar</b>, arriba a la derecha.</li>"
+      : "<li>Arriba a la derecha, toca los <b>tres puntitos</b> del navegador.</li>" +
+        "<li>Elige <b>Agregar a la pantalla principal</b> (o <b>Instalar aplicación</b>).</li>" +
+        "<li>Confirma con <b>Agregar</b>.</li>") + "</ol>",
+    async () => {}, "Entendido", "verde");
+  const cancelar = document.getElementById("v-cancelar");
+  if (cancelar) cancelar.classList.add("oculto");
 }
 
 function conectado(si) {
@@ -639,7 +602,7 @@ async function entrar(ev) {
   $("error-entrar").classList.add("oculto");
   $("clave").value = "";
   conectado(true);
-  await refrescar();
+  await refrescar(false);
 }
 
 function conectarBotones() {
@@ -651,6 +614,7 @@ function conectarBotones() {
   });
   $("buscar").addEventListener("input", pintarLista);
   $("solo-deben").addEventListener("change", pintarLista);
+  $("ver-archivados").addEventListener("change", pintarLista);
   $("btn-nuevo").addEventListener("click", nuevoCliente);
   $("btn-volver").addEventListener("click", volverALaLista);
   $("lista").addEventListener("click", (e) => {
@@ -696,20 +660,7 @@ function conectarBotones() {
 }
 
 function mandarWhatsapp(cl) {
-  const pend = D.compras.filter((c) => c.cliente_id === cl.id && c.falta > 0)
-                        .sort((a, b) => a.fecha.localeCompare(b.fecha));
-  const nombre = (cl.nombre || "").split(" ")[0];
-  let texto;
-  if (!pend.length) {
-    texto = "Hola " + nombre + ", te saludamos de Carnicería El Buen Corte. Tu cuenta " +
-            "está al día, no tienes nada pendiente. ¡Gracias!";
-  } else {
-    texto = "Hola " + nombre + ", te saludamos de Carnicería El Buen Corte.\n" +
-      "Te dejamos el detalle de tu cuenta pendiente:\n\n" +
-      pend.map((c) => "- " + fechaCorta(c.fecha) + "  " + (c.detalle || "Compra") + "  " +
-        pesos(c.falta) + (c.abonado ? " (abonado " + pesos(c.abonado) + ")" : "")).join("\n") +
-      "\n\nTotal pendiente: " + pesos(cl.deuda) + "\n\n¡Gracias!";
-  }
+  const texto = C.textoWhatsapp(cl, D.compras.filter((c) => c.cliente_id === cl.id));
   const numero = telefonoWhatsapp(cl.telefono);
   window.open(numero ? "https://wa.me/" + numero + "?text=" + encodeURIComponent(texto)
                      : "https://wa.me/?text=" + encodeURIComponent(texto), "_blank");
@@ -717,10 +668,11 @@ function mandarWhatsapp(cl) {
 
 (async function arrancar() {
   conectarBotones();
+  prepararInstalacion();
   const { data } = await sb.auth.getSession();
   if (data && data.session) {
     conectado(true);
-    await refrescar();
+    await refrescar(false);
   } else {
     conectado(false);
   }

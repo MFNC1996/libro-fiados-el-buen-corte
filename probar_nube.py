@@ -54,10 +54,10 @@ class ServidorFalso(object):
             devueltas.append(fila)
         return devueltas
 
-    def listar(self, tabla, local_id, desde):
+    def listar(self, tabla, local_id, desde, tope=500):
         filas = [f for f in self.tablas[tabla].values()
                  if f.get("local_id") == local_id and (not desde or f["actualizado"] > desde)]
-        return sorted(filas, key=lambda f: f["actualizado"])
+        return sorted(filas, key=lambda f: f["actualizado"])[:tope]
 
 
 ESTADO = ServidorFalso()
@@ -137,7 +137,8 @@ class Manejador(BaseHTTPRequestHandler):
         tabla = ruta.path[len("/rest/v1/"):]
         local = (q.get("local_id", ["eq."])[0])[3:]
         desde = (q.get("actualizado", [""])[0])[3:]
-        self._responder(200, ESTADO.listar(tabla, local, desde))
+        tope = int(q.get("limit", ["500"])[0])
+        self._responder(200, ESTADO.listar(tabla, local, desde, tope))
 
 
 servidor = HTTPServer(("127.0.0.1", 0), Manejador)
@@ -324,6 +325,22 @@ nuevo_celular.recibir_pago(marta["id"], 9900)
 sincronizar(nuevo_celular); sincronizar(local)
 check("lo que cobra el dueno desde el celular llega al computador",
       local.deuda(marta["id"]) == 0)
+
+print("\n--- un libro grande se sincroniza entero, por tandas ---")
+grande = dispositivo("local-con-historia", "local-grande")
+cliente_grande = grande.agregar_cliente("Cliente de muchos años")
+for i in range(600):                      # mas de lo que cabe en una sola tanda
+    grande.anotar(cliente_grande, "Compra %d" % i, 1000, "2026-01-01")
+check("hay 601 cosas por subir", grande.hay_pendientes() == 601)
+sincronizar(grande)
+check("se subio todo", grande.hay_pendientes() == 0)
+check("el servidor tiene las 600 compras", len(
+    [c for c in ESTADO.tablas["compras"].values() if c["local_id"] == "local-grande"]) == 600)
+otro = dispositivo("otro-dispositivo", "local-grande")
+sincronizar(otro)
+check("el otro dispositivo las baja todas (no solo la primera tanda)",
+      len(otro.compras_de(cliente_grande)) == 600)
+check("con la deuda completa", otro.deuda(cliente_grande) == 600 * 1000)
 
 print("\n--- el dueno crea mas usuarios desde el programa ---")
 check("al principio solo esta el dueno", len(S.usuarios(pc)) == 1)
