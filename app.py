@@ -608,7 +608,7 @@ class App(tk.Tk):
     def _buscar_enter(self, evento=None):
         hijos = self.tv_cli.get_children()
         if len(hijos) == 1:
-            self.abrir_cliente(int(hijos[0]))
+            self.abrir_cliente(hijos[0])
             self._foco_anotar()
         elif not hijos and self.e_buscar.valor():
             self.nuevo_cliente(self.e_buscar.valor())
@@ -628,8 +628,8 @@ class App(tk.Tk):
         sel = self.tv_cli.selection()
         # El aviso de seleccion llega despues, tambien cuando la marcamos
         # nosotros; si ya esta abierto ese cliente no hay nada que hacer.
-        if sel and int(sel[0]) != self.sel:
-            self.abrir_cliente(int(sel[0]))
+        if sel and sel[0] != self.sel:
+            self.abrir_cliente(sel[0])
 
     def ir_a_buscar(self):
         self.e_buscar.focus_set()
@@ -723,7 +723,7 @@ class App(tk.Tk):
     def _abrir_mayor(self, evento=None):
         sel = self.tv_mayores.selection()
         if sel and sel[0] != "nadie":
-            self.abrir_cliente(int(sel[0]))
+            self.abrir_cliente(sel[0])
             self._foco_anotar()
 
     def mostrar_inicio(self):
@@ -1103,7 +1103,7 @@ class App(tk.Tk):
         self.pintar_cliente()
 
     def _compras_elegidas(self):
-        return [int(i) for i in self.tv_compras.selection() if i != "vacio"]
+        return [i for i in self.tv_compras.selection() if i != "vacio"]
 
     def _botones_compra(self):
         ids = self._compras_elegidas()
@@ -1163,9 +1163,9 @@ class App(tk.Tk):
             self.filtro = "pendientes"
         self.nb.select(self.tab_compras)
         self.recargar_todo()
-        if self.tv_compras.exists(str(cid)):
-            self.tv_compras.selection_set(str(cid))
-            self.tv_compras.see(str(cid))
+        if self.tv_compras.exists(cid):
+            self.tv_compras.selection_set(cid)
+            self.tv_compras.see(cid)
         self.e_detalle.focus_set()
         self.avisar("Anotado a %s: %s  %s" % (self._cl["nombre"], detalle or "compra",
                                                N.pesos(monto)))
@@ -1180,7 +1180,7 @@ class App(tk.Tk):
         fila = self.tv_compras.identify_row(evento.y)
         if fila and fila != "vacio":
             self.tv_compras.selection_set(fila)
-            self.cambiar_pagada(int(fila))
+            self.cambiar_pagada(fila)
             return "break"
 
     def _doble_clic_en_compra(self, evento):
@@ -1189,7 +1189,7 @@ class App(tk.Tk):
             return "break"
         fila = self.tv_compras.identify_row(evento.y)
         if fila and fila != "vacio":
-            self.editar_compra(int(fila))
+            self.editar_compra(fila)
 
     def cambiar_pagada(self, compra_id=None):
         if compra_id is None:
@@ -1315,7 +1315,7 @@ class App(tk.Tk):
                 "cubría vuelven a quedar pendientes." % (valores[0], valores[1]),
                 icon="warning"):
             return
-        self.datos.borrar_pago(int(sel[0]))
+        self.datos.borrar_pago(sel[0])
         self.recargar_todo()
         self.avisar("Deshecho. Ahora debe %s." % N.pesos(self._cl["deuda"]), AMBAR)
 

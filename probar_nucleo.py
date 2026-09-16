@@ -144,7 +144,8 @@ print("\n--- deshacer un pago ---")
 d.borrar_pago(p["id"])
 check("sin pagos", len(d.pagos_de(juan)), 0)
 check("todo pendiente otra vez", d.deuda(juan), 8990 + 15000 + 6500)
-check("sin abonos colgando", d.cx.execute("SELECT COUNT(*) FROM aplicaciones").fetchone()[0], 0)
+check("sin abonos colgando", d.cx.execute(
+    "SELECT COUNT(*) FROM aplicaciones WHERE borrado=0").fetchone()[0], 0)
 
 print("\n--- pagar solo unas compras elegidas ---")
 r = d.recibir_pago(juan, 6500, compras=[c3])
@@ -217,6 +218,96 @@ open(basura, "w").write("hola")
 falla_con("un archivo cualquiera no se restaura", d.restaurar, basura)
 falla_con("un archivo que no existe", N.Datos.revisar_copia, basura + "x")
 check("la base sigue sana", d.deuda(ana), 4000)
+
+print("\n--- lo que falta subir a internet ---")
+d2 = N.Datos(os.path.join(tempfile.mkdtemp(), "sync.sqlite3"))
+d2.guardar_config("local_id", "local-de-prueba")
+check("guarda el local", d2.config("local_id"), "local-de-prueba")
+pedro = d2.agregar_cliente("Pedro")
+check("el cliente nuevo queda por subir", len(d2.filas_pendientes("clientes")), 1)
+check("con el codigo del local", d2.filas_pendientes("clientes")[0]["local_id"],
+      "local-de-prueba")
+check("el id es un codigo unico", len(pedro), 36)
+compra = d2.anotar(pedro, "Pernil", 9000)
+check("la compra tambien", len(d2.filas_pendientes("compras")), 1)
+d2.olvidar_pendientes("clientes", [pedro])
+d2.olvidar_pendientes("compras", [compra])
+check("ya no queda nada por subir", d2.hay_pendientes(), 0)
+d2.editar_cliente(pedro, "Pedro Soto")
+check("editar lo vuelve a dejar por subir", len(d2.filas_pendientes("clientes")), 1)
+check("y le pone hora nueva", d2.filas_pendientes("clientes")[0]["actualizado"] >
+      d2.filas_pendientes("clientes")[0]["creado"], True)
+d2.olvidar_pendientes("clientes", [pedro])
+d2.borrar_compra(compra)
+check("borrar no borra de verdad: marca", d2.cx.execute(
+    "SELECT borrado FROM compras WHERE id=?", (compra,)).fetchone()[0], 1)
+check("y queda por subir", len(d2.filas_pendientes("compras")), 1)
+check("pero ya no se ve en el libro", len(d2.compras_de(pedro)), 0)
+
+print("\n--- lo que llega de internet ---")
+d2.olvidar_pendientes("compras", [compra])
+ajeno = "11111111-2222-3333-4444-555555555555"
+d2.guardar_de_la_nube("clientes", [{"id": ajeno, "local_id": "local-de-prueba",
+                                    "nombre": "Rosa del celular", "telefono": "",
+                                    "nota": "", "activo": True, "borrado": False,
+                                    "creado": "2026-09-16T10:00:00Z",
+                                    "actualizado": "2026-09-16T10:00:00Z"}])
+check("aparece el cliente que se creo en el celular",
+      d2.cliente(ajeno)["nombre"], "Rosa del celular")
+check("y no queda marcado para subir (ya venia de alla)", d2.hay_pendientes(), 0)
+d2.guardar_de_la_nube("clientes", [{"id": ajeno, "nombre": "Rosa Soto",
+                                    "actualizado": "2026-09-16T11:00:00Z"}])
+check("un cambio de alla se aplica aca", d2.cliente(ajeno)["nombre"], "Rosa Soto")
+d2.editar_cliente(ajeno, "Rosa como la anoto el local")
+d2.guardar_de_la_nube("clientes", [{"id": ajeno, "nombre": "Rosa vieja",
+                                    "actualizado": "2026-09-16T09:00:00Z"}])
+check("lo que aun no se sube desde aca no lo pisa el servidor",
+      d2.cliente(ajeno)["nombre"], "Rosa como la anoto el local")
+d2.guardar_de_la_nube("clientes", [{"id": ajeno, "borrado": True,
+                                    "actualizado": "2026-09-16T12:00:00Z"}])
+check("borrar en el celular todavia no pisa lo pendiente", d2.cliente(ajeno) is not None, True)
+d2.olvidar_pendientes("clientes", [ajeno])
+d2.guardar_de_la_nube("clientes", [{"id": ajeno, "borrado": True,
+                                    "actualizado": "2026-09-16T12:00:00Z"}])
+check("y despues de subir, si se borra aca", d2.cliente(ajeno), None)
+
+print("\n--- una base de la version 1 se copia sin perder nada ---")
+import sqlite3
+ruta_v1 = os.path.join(tempfile.mkdtemp(), "vieja.sqlite3")
+vieja = sqlite3.connect(ruta_v1)
+vieja.executescript("""
+    CREATE TABLE clientes (id INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL,
+        telefono TEXT NOT NULL DEFAULT '', nota TEXT NOT NULL DEFAULT '',
+        activo INTEGER NOT NULL DEFAULT 1, creado TEXT NOT NULL DEFAULT '');
+    CREATE TABLE compras (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL,
+        fecha TEXT NOT NULL, detalle TEXT NOT NULL DEFAULT '', monto INTEGER NOT NULL,
+        creado TEXT NOT NULL DEFAULT '');
+    CREATE TABLE pagos (id INTEGER PRIMARY KEY AUTOINCREMENT, cliente_id INTEGER NOT NULL,
+        fecha TEXT NOT NULL, monto INTEGER NOT NULL, nota TEXT NOT NULL DEFAULT '',
+        creado TEXT NOT NULL DEFAULT '');
+    CREATE TABLE aplicaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, pago_id INTEGER NOT NULL,
+        compra_id INTEGER NOT NULL, monto INTEGER NOT NULL);
+    INSERT INTO clientes (nombre, telefono, creado) VALUES ('Juan Antiguo', '912345678', '2026-09-01 10:00:00');
+    INSERT INTO compras (cliente_id, fecha, detalle, monto, creado) VALUES (1, '2026-09-02', 'Costillar', 15000, '2026-09-02 10:00:00');
+    INSERT INTO compras (cliente_id, fecha, detalle, monto, creado) VALUES (1, '2026-09-04', 'Molida', 5000, '2026-09-04 10:00:00');
+    INSERT INTO pagos (cliente_id, fecha, monto, creado) VALUES (1, '2026-09-05', 5000, '2026-09-05 10:00:00');
+    INSERT INTO aplicaciones (pago_id, compra_id, monto) VALUES (1, 1, 5000);
+""")
+vieja.commit(); vieja.close()
+d3 = N.Datos(ruta_v1)
+cl = d3.clientes()[0]
+check("el cliente esta", cl["nombre"], "Juan Antiguo")
+check("con su telefono", cl["telefono"], "912345678")
+check("las dos compras estan", len(d3.compras_de(cl["id"])), 2)
+check("la deuda es la misma", d3.deuda(cl["id"]), 15000 + 5000 - 5000)
+check("el abono quedo pegado a la compra correcta",
+      [c["abonado"] for c in d3.compras_de(cl["id"]) if c["detalle"] == "Costillar"], [5000])
+check("ahora los codigos son unicos", len(cl["id"]), 36)
+check("todo queda listo para subirse la primera vez", d3.hay_pendientes(), 5)
+check("las tablas viejas se guardan por si acaso", bool(d3.cx.execute(
+    "SELECT 1 FROM sqlite_master WHERE name='clientes_v1'").fetchone()), True)
+d3b = N.Datos(ruta_v1)
+check("abrirla de nuevo no duplica nada", len(d3b.clientes()), 1)
 
 print("\n--- 3000 operaciones al azar: las cuentas siempre cuadran ---")
 import random
