@@ -11,7 +11,7 @@
 <link rel="icon" href="icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Libro de Fiados">
-<link rel="stylesheet" href="estilo.css?v=2">
+<link rel="stylesheet" href="estilo.css?v=3">
 </head>
 <body>
 
@@ -102,10 +102,10 @@
         <span class="rotulo">Anotar lo que lleva</span>
         <div class="campos">
           <input type="text" id="a-fecha" placeholder="hoy" autocomplete="off">
-          <input type="text" id="a-monto" placeholder="$" inputmode="numeric" autocomplete="off">
-          <input type="text" id="a-detalle" class="largo" autocomplete="off"
+          <input type="text" id="a-detalle" autocomplete="off"
                  placeholder="Ej: 1 kg de molida, 2 chuletas">
-          <button class="boton rojo largo" id="btn-anotar">ANOTAR</button>
+          <input type="text" id="a-monto" placeholder="$" inputmode="numeric" autocomplete="off">
+          <button class="boton rojo" id="btn-anotar">ANOTAR</button>
         </div>
         <p class="ayuda" id="a-ayuda">La fecha vacía es hoy. Los puntos de los miles se marcan solos.</p>
       </div>
@@ -134,7 +134,7 @@
 <div id="ventanita"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="cuentas.js?v=2"></script>
-<script src="libro.js?v=2"></script>
+<script src="cuentas.js?v=3"></script>
+<script src="libro.js?v=3"></script>
 </body>
 </html>

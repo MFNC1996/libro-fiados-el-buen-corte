@@ -94,7 +94,8 @@ label.campo .rotulo{display:block; margin-bottom:3px}
 
 .anotar{border-left:5px solid var(--rojo)}
 .anotar .rotulo{color:var(--rojo); margin-bottom:8px}
-.anotar .campos{display:grid; grid-template-columns:96px 1fr; gap:8px}
+/* Fecha | Que lleva  /  Monto | ANOTAR : el mismo orden del computador. */
+.anotar .campos{display:grid; grid-template-columns:120px 1fr; gap:8px}
 .anotar .campos .largo{grid-column:1 / -1}
 .anotar .ayuda{color:var(--pista); font-size:11.5px; margin-top:6px}
 
@@ -170,4 +171,5 @@ footer{padding:14px 14px calc(18px + env(safe-area-inset-bottom));
   .doble > .panel{border-right:1px solid var(--linea); min-height:calc(100vh - 120px)}
   .doble > .hoja{background:var(--papel); min-height:calc(100vh - 120px)}
   .volver{display:none}
+  .instalar{display:none}          /* el acceso directo es cosa del celular */
 }
