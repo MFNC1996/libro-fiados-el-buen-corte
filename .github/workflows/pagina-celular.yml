@@ -1,0 +1,46 @@
+name: Pagina del celular
+
+# Publica la carpeta web/ en GitHub Pages: es la pagina que abre el dueno
+# desde su celular. No lleva datos: los pide a Supabase despues de entrar.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/pagina-celular.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publicar.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Revisar que la pagina no tenga errores de escritura
+        run: |
+          node --check web/libro.js
+          test -f web/index.html && test -f web/estilo.css && test -f web/manifest.json
+          # La llave "anon" es publica, pero la secreta no puede estar nunca aqui.
+          if grep -rqi "service_role" web/; then
+            echo "Hay una llave secreta en la pagina"; exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: publicar
+        uses: actions/deploy-pages@v4
