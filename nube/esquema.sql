@@ -152,6 +152,90 @@ begin
     end loop;
 end $$;
 
+-- ================================================================= usuarios
+--  El dueno puede dar y quitar acceso a otras personas (por ejemplo quien
+--  atiende el mostrador) desde el mismo programa, sin entrar aqui.
+--
+--  Estas funciones corren "en nombre del sistema" (security definer), asi que
+--  cada una parte comprobando quien la llama: si no es el dueno del local, no
+--  hace nada. Es la unica forma de que el programa instalado en el local no
+--  necesite llevar adentro ninguna llave secreta.
+-- ==========================================================================
+
+-- Quienes pueden entrar a mi local.
+create or replace function public.usuarios_del_local()
+returns table (correo text, rol text, desde timestamptz)
+language sql stable security definer set search_path = public as $$
+    select u.email::text, m.rol, m.creado
+      from public.miembros m
+      join auth.users u on u.id = m.user_id
+     where m.local_id in (select public.mis_locales())
+     order by (m.rol = 'dueno') desc, m.creado
+$$;
+
+-- Darle acceso a alguien que ya tiene cuenta creada.
+create or replace function public.agregar_al_local(p_correo text,
+                                                   p_rol text default 'ayudante')
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v_local uuid;
+    v_user  uuid;
+begin
+    select local_id into v_local
+      from public.miembros
+     where user_id = auth.uid() and rol = 'dueno'
+     limit 1;
+    if v_local is null then
+        raise exception 'Solo el dueño puede dar acceso a otras personas.';
+    end if;
+
+    select id into v_user from auth.users
+     where lower(email) = lower(trim(p_correo));
+    if v_user is null then
+        raise exception 'Todavía no hay una cuenta con el correo %. Créala primero.',
+                        p_correo;
+    end if;
+
+    insert into public.miembros (user_id, local_id, rol)
+    values (v_user, v_local, coalesce(nullif(trim(p_rol), ''), 'ayudante'))
+    on conflict (user_id, local_id) do update set rol = excluded.rol;
+    return 'listo';
+end $$;
+
+-- Quitarle el acceso a alguien (la cuenta sigue existiendo, pero ya no ve el local).
+create or replace function public.quitar_del_local(p_correo text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v_local uuid;
+    v_user  uuid;
+begin
+    select local_id into v_local
+      from public.miembros
+     where user_id = auth.uid() and rol = 'dueno'
+     limit 1;
+    if v_local is null then
+        raise exception 'Solo el dueño puede quitar el acceso.';
+    end if;
+
+    select id into v_user from auth.users where lower(email) = lower(trim(p_correo));
+    if v_user is null then
+        raise exception 'No hay ninguna cuenta con el correo %.', p_correo;
+    end if;
+    if v_user = auth.uid() then
+        raise exception 'El dueño no se puede quitar a sí mismo.';
+    end if;
+
+    delete from public.miembros where user_id = v_user and local_id = v_local;
+    return 'listo';
+end $$;
+
+revoke execute on function public.usuarios_del_local()          from anon;
+revoke execute on function public.agregar_al_local(text, text)  from anon;
+revoke execute on function public.quitar_del_local(text)        from anon;
+grant  execute on function public.usuarios_del_local()          to authenticated;
+grant  execute on function public.agregar_al_local(text, text)  to authenticated;
+grant  execute on function public.quitar_del_local(text)        to authenticated;
+
 -- ============================================================================
 --  LISTO. Ahora falta crear el local y decir quien entra: eso va en el
 --  archivo "primer-uso.sql", despues de crear el usuario del dueno.

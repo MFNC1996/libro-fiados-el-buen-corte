@@ -283,6 +283,9 @@ class Datos(object):
         self.cx.row_factory = sqlite3.Row
         self.cx.execute("PRAGMA journal_mode=WAL")
         self.cx.execute("PRAGMA foreign_keys=ON")
+        # La ventana y el sincronizador usan el mismo archivo: si uno esta
+        # escribiendo, el otro espera un momento en vez de dar error.
+        self.cx.execute("PRAGMA busy_timeout=5000")
         self.local_id = ""
         self._preparar()
         self.local_id = self.config("local_id", "")

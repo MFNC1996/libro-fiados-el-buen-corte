@@ -327,6 +327,38 @@ check("ayuda y acerca de abren", preguntas[-2:] == ["Cómo se usa", "Acerca de"]
 v.mostrar_inicio()
 al_dia()
 
+print("\n--- la cuenta y los usuarios ---")
+check("parte sin conectar", not app.sincronizador.hay_sesion(v.datos))
+check("el programa ya sabe a que servidor conectarse", v.datos.config("url").startswith("https://"))
+check("y a que local", len(v.datos.config("local_id")) == 36)
+dlg = app.DialogoCuenta(v, v.datos)
+dlg.e_correo.poner("dueno@local.cl")
+dlg._ok()
+check("sin internet, entrar avisa y no deja la sesion a medias",
+      dlg.lbl_error.cget("text") != "" and not app.sincronizador.hay_sesion(v.datos))
+dlg.destroy()
+# Con la sesion puesta a mano (como si ya hubiera entrado), la pantalla de
+# usuarios se arma y muestra a la gente.
+v.datos.guardar_config("refresco", "de-mentira")
+app.sincronizador.usuarios = lambda datos: [
+    {"correo": "dueno@local.cl", "rol": "dueno", "desde": "2026-09-01T10:00:00Z"},
+    {"correo": "mostrador@local.cl", "rol": "ayudante", "desde": "2026-09-16T10:00:00Z"}]
+du = app.DialogoUsuarios(v, v.datos)
+du.recargar()
+check("la lista muestra a los dos", len(du.tv.get_children()) == 2)
+check("y dice quien es el dueno",
+      du.tv.item("dueno@local.cl", "values")[1] == "el dueño")
+du.tv.selection_set("dueno@local.cl")
+du.quitar()
+check("no deja quitar al dueno", preguntas[-1] == "No se puede")
+quitados = []
+app.sincronizador.quitar_acceso = lambda datos, correo: quitados.append(correo)
+du.tv.selection_set("mostrador@local.cl")
+du.quitar()
+check("y si deja quitar al ayudante", quitados == ["mostrador@local.cl"])
+du.destroy()
+v.datos.guardar_config("refresco", "")
+
 print("\n--- cerrar deja la copia del dia ---")
 v.cerrar()
 copias = os.listdir(os.path.join(N.carpeta_datos(), "respaldos"))
