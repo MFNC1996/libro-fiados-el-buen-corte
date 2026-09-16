@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import nucleo as N
 import instancia
 import estado_cuenta
+import sincronizador
 
 # Paleta del logo del local
 ROJO = "#C8202D"          # las letras
@@ -37,7 +38,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "1.2.1"
+VERSION = "2.0.0"
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -351,6 +352,12 @@ class App(tk.Tk):
 
         self._atajos()
         self.protocol("WM_DELETE_WINDOW", self.cerrar)
+        self._paso("Conectando con internet...", 48)
+        sincronizador.configurar(self.datos)
+        self.sinc = sincronizador.Sincronizador(self.datos.ruta)
+        self.sinc.start()
+        self._version_nube = 0
+        self.after(1500, self._mirar_nube)
         self._paso("Cargando clientes...", 52)
         self.recargar_todo()
         self.mostrar_inicio()
@@ -446,6 +453,11 @@ class App(tk.Tk):
         archivo.add_command(label="Buscar cliente", accelerator="Ctrl+B",
                             command=self.ir_a_buscar)
         archivo.add_separator()
+        archivo.add_command(label="Cuenta del local (compartir con el celular)...",
+                            command=self.cuenta_del_local)
+        archivo.add_command(label="Quién puede entrar (usuarios)...",
+                            command=self.usuarios_del_local)
+        archivo.add_separator()
         archivo.add_command(label="Guardar una copia de seguridad...",
                             command=self.copia_manual)
         archivo.add_command(label="Restaurar desde una copia...",
@@ -523,6 +535,10 @@ class App(tk.Tk):
                                      font=(FUENTE, 8), cursor="hand2")
         self.lbl_respaldo.pack(side="right", padx=16)
         self.lbl_respaldo.bind("<Button-1>", lambda e: self.abrir_carpeta_datos())
+        self.lbl_nube = tk.Label(pie, text="", bg=BLANCO, fg=SUAVE,
+                                 font=(FUENTE, 8, "bold"), cursor="hand2")
+        self.lbl_nube.pack(side="right", padx=(0, 8))
+        self.lbl_nube.bind("<Button-1>", lambda e: self.cuenta_del_local())
 
     def _atajos(self):
         for tecla, accion in (("n", self.nuevo_cliente), ("b", self.ir_a_buscar),
@@ -608,7 +624,7 @@ class App(tk.Tk):
     def _buscar_enter(self, evento=None):
         hijos = self.tv_cli.get_children()
         if len(hijos) == 1:
-            self.abrir_cliente(int(hijos[0]))
+            self.abrir_cliente(hijos[0])
             self._foco_anotar()
         elif not hijos and self.e_buscar.valor():
             self.nuevo_cliente(self.e_buscar.valor())
@@ -628,8 +644,8 @@ class App(tk.Tk):
         sel = self.tv_cli.selection()
         # El aviso de seleccion llega despues, tambien cuando la marcamos
         # nosotros; si ya esta abierto ese cliente no hay nada que hacer.
-        if sel and int(sel[0]) != self.sel:
-            self.abrir_cliente(int(sel[0]))
+        if sel and sel[0] != self.sel:
+            self.abrir_cliente(sel[0])
 
     def ir_a_buscar(self):
         self.e_buscar.focus_set()
@@ -723,7 +739,7 @@ class App(tk.Tk):
     def _abrir_mayor(self, evento=None):
         sel = self.tv_mayores.selection()
         if sel and sel[0] != "nadie":
-            self.abrir_cliente(int(sel[0]))
+            self.abrir_cliente(sel[0])
             self._foco_anotar()
 
     def mostrar_inicio(self):
@@ -1103,7 +1119,7 @@ class App(tk.Tk):
         self.pintar_cliente()
 
     def _compras_elegidas(self):
-        return [int(i) for i in self.tv_compras.selection() if i != "vacio"]
+        return [i for i in self.tv_compras.selection() if i != "vacio"]
 
     def _botones_compra(self):
         ids = self._compras_elegidas()
@@ -1163,9 +1179,9 @@ class App(tk.Tk):
             self.filtro = "pendientes"
         self.nb.select(self.tab_compras)
         self.recargar_todo()
-        if self.tv_compras.exists(str(cid)):
-            self.tv_compras.selection_set(str(cid))
-            self.tv_compras.see(str(cid))
+        if self.tv_compras.exists(cid):
+            self.tv_compras.selection_set(cid)
+            self.tv_compras.see(cid)
         self.e_detalle.focus_set()
         self.avisar("Anotado a %s: %s  %s" % (self._cl["nombre"], detalle or "compra",
                                                N.pesos(monto)))
@@ -1180,7 +1196,7 @@ class App(tk.Tk):
         fila = self.tv_compras.identify_row(evento.y)
         if fila and fila != "vacio":
             self.tv_compras.selection_set(fila)
-            self.cambiar_pagada(int(fila))
+            self.cambiar_pagada(fila)
             return "break"
 
     def _doble_clic_en_compra(self, evento):
@@ -1189,7 +1205,7 @@ class App(tk.Tk):
             return "break"
         fila = self.tv_compras.identify_row(evento.y)
         if fila and fila != "vacio":
-            self.editar_compra(int(fila))
+            self.editar_compra(fila)
 
     def cambiar_pagada(self, compra_id=None):
         if compra_id is None:
@@ -1315,7 +1331,7 @@ class App(tk.Tk):
                 "cubría vuelven a quedar pendientes." % (valores[0], valores[1]),
                 icon="warning"):
             return
-        self.datos.borrar_pago(int(sel[0]))
+        self.datos.borrar_pago(sel[0])
         self.recargar_todo()
         self.avisar("Deshecho. Ahora debe %s." % N.pesos(self._cl["deuda"]), AMBAR)
 
@@ -1396,6 +1412,8 @@ class App(tk.Tk):
 
     # ============================================================ recargas
     def recargar_todo(self):
+        if getattr(self, "sinc", None) is not None:
+            self.sinc.apurar()            # lo recien anotado sube sin esperar
         r = self.datos.resumen()
         self.lbl_por_cobrar.config(text=N.pesos(r["por_cobrar"]))
         self.recargar_clientes()
@@ -1443,6 +1461,62 @@ class App(tk.Tk):
             self.lbl_sin_resultados.place(x=14, rely=0.35, relwidth=0.9)
         else:
             self.lbl_sin_resultados.place_forget()
+
+    # ------------------------------------------------------- internet
+    def _mirar_nube(self):
+        """
+        Cada dos segundos: como va la conexion, y si llego algo del celular.
+        Lo unico que se hace aca es mirar; el trabajo lo hace el sincronizador
+        en segundo plano, para que la ventana nunca se quede pegada.
+        """
+        e = self.sinc.estado
+        pend = e.get("pendientes", 0)
+        if not sincronizador.hay_sesion(self.datos):
+            self.lbl_nube.config(text="Sin conectar  ·  solo en este computador",
+                                 fg=SUAVE)
+        elif e.get("conectado"):
+            self.lbl_nube.config(
+                text="Al día con el celular" if not pend
+                else "Subiendo %d cambio%s..." % (pend, "" if pend == 1 else "s"),
+                fg=VERDE)
+        else:
+            self.lbl_nube.config(
+                text="Sin internet" + ("  ·  %d por subir" % pend if pend else "") +
+                     "  ·  se anota igual", fg=AMBAR)
+        if self.sinc.version != self._version_nube:
+            self._version_nube = self.sinc.version
+            self.recargar_todo()
+            self.avisar("Llegaron cambios hechos en el celular.")
+        self.after(2000, self._mirar_nube)
+
+    def cuenta_del_local(self):
+        """Entrar (o salir) de la cuenta que comparte el libro con el celular."""
+        if self.grab_current() is not None:
+            return
+        if sincronizador.hay_sesion(self.datos):
+            correo = self.datos.config("correo") or "la cuenta del local"
+            if not messagebox.askyesno(
+                    "Cuenta del local",
+                    "Este computador está conectado como %s.\n\nLo anotado se comparte "
+                    "con el celular.\n\n¿Desconectar este computador?\n\nSeguirá "
+                    "funcionando igual, pero dejará de compartir hasta que vuelvas a "
+                    "entrar." % correo):
+                return
+            sincronizador.salir(self.datos)
+            return self.avisar("Este computador quedó desconectado del celular.", AMBAR)
+        if DialogoCuenta(self, self.datos).mostrar():
+            self.sinc.apurar()
+            self.avisar("Conectado. Lo anotado ahora se comparte con el celular.")
+
+    def usuarios_del_local(self):
+        if self.grab_current() is not None:
+            return
+        if not sincronizador.hay_sesion(self.datos):
+            return messagebox.showinfo(
+                "Primero hay que conectarse",
+                "Para manejar quién entra hay que estar conectado con la cuenta del "
+                "local.\n\nMenú Archivo → «Cuenta del local».")
+        DialogoUsuarios(self, self.datos).mostrar()
 
     # -------------------------------------------------------------- avisos
     def avisar(self, texto, color=VERDE):
@@ -1553,6 +1627,8 @@ class App(tk.Tk):
                                          self.datos.ruta))
 
     def cerrar(self):
+        if getattr(self, "sinc", None) is not None:
+            self.sinc.detener()
         # Lo que quedaba programado (borrar un aviso, etc.) ya no tiene ventana.
         try:
             for pendiente in self.tk.splitlist(self.tk.call("after", "info")):
@@ -1670,6 +1746,161 @@ class DialogoCliente(Dialogo):
             return self.cl["id"]
         return self.datos.agregar_cliente(self.e_nombre.valor(), self.e_tel.valor(),
                                           self.e_nota.valor())
+
+
+class DialogoCuenta(Dialogo):
+    """Entrar con el correo y la clave del local, para compartir con el celular."""
+
+    def __init__(self, padre, datos):
+        Dialogo.__init__(self, padre, "Cuenta del local", "Entrar", "verde")
+        self.datos = datos
+        tk.Label(self.cuerpo, text="Compartir el libro con el celular", bg=BLANCO,
+                 fg=TINTA, font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(self.cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 wraplength=px(380),
+                 text="Con esto, lo que se anota en el computador se ve en el celular "
+                      "y al revés. Se entra una sola vez: después queda guardado.").grid(
+            row=1, column=0, sticky="w", pady=(2, 0))
+        self.e_correo = self.campo(1, "CORREO", "Ej: elbuencorte@gmail.com",
+                                   datos.config("correo"), largo=80)
+        self.e_clave = self.campo(2, "CLAVE", "")
+        self.e_clave.config(show="•")
+        if datos.config("correo"):
+            self.primero = self.e_clave
+
+    def aceptar(self):
+        if not self.e_correo.valor() or not self.e_clave.valor():
+            raise ValueError("Escribe el correo y la clave.")
+        try:
+            sincronizador.entrar(self.datos, self.e_correo.valor(), self.e_clave.valor())
+        except sincronizador.ErrorDeNube as e:
+            raise ValueError(str(e))
+        return True
+
+
+class DialogoUsuarios(tk.Toplevel):
+    """Quien puede entrar al libro: agregar gente y quitarles el acceso."""
+
+    def __init__(self, padre, datos):
+        tk.Toplevel.__init__(self, padre, bg=BLANCO)
+        self.withdraw()
+        self.title("Quién puede entrar")
+        self.resizable(False, False)
+        self.transient(padre)
+        self.padre, self.datos = padre, datos
+
+        cuerpo = tk.Frame(self, bg=BLANCO)
+        cuerpo.pack(fill="both", expand=True, padx=22, pady=(18, 6))
+        tk.Label(cuerpo, text="Quién puede entrar al libro", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).pack(anchor="w")
+        tk.Label(cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 wraplength=px(440),
+                 text="Cada persona entra con su propio correo y clave, desde el "
+                      "celular o desde otro computador. Ve y anota lo mismo que aquí.").pack(
+            anchor="w", pady=(2, 12))
+
+        marco = tk.Frame(cuerpo, bg=BLANCO, highlightthickness=1, highlightbackground=LINEA)
+        marco.pack(fill="both", expand=True)
+        cols = ("correo", "rol", "desde")
+        self.tv = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse",
+                               height=6)
+        for c, t, a, al in zip(cols, ("Correo", "Es", "Desde"), (260, 100, 100),
+                               ("w", "w", "w")):
+            self.tv.heading(c, text=t, anchor=al)
+            self.tv.column(c, width=px(a), anchor=al, stretch=(c == "correo"))
+        self.tv.pack(fill="both", expand=True)
+
+        self.lbl = tk.Label(cuerpo, text="Consultando...", bg=BLANCO, fg=SUAVE,
+                            font=(FUENTE, 9))
+        self.lbl.pack(anchor="w", pady=(6, 0))
+
+        pie = tk.Frame(self, bg=PAPEL)
+        pie.pack(fill="x", side="bottom")
+        Boton(pie, "Cerrar", self.destroy, "claro").pack(side="right", padx=(6, 18),
+                                                         pady=12)
+        self.btn_quitar = Boton(pie, "Quitar el acceso", self.quitar, "claro")
+        self.btn_quitar.pack(side="left", padx=(18, 6), pady=12)
+        Boton(pie, "+  Agregar persona", self.agregar, "rojo").pack(side="left", pady=12)
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def mostrar(self):
+        self.update_idletasks()
+        x = self.padre.winfo_rootx() + (self.padre.winfo_width() - self.winfo_reqwidth()) // 2
+        y = self.padre.winfo_rooty() + px(80)
+        self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+        self.deiconify()
+        self.lift()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+        self.after(50, self.recargar)
+        self.wait_window()
+
+    def recargar(self):
+        self.tv.delete(*self.tv.get_children())
+        try:
+            gente = sincronizador.usuarios(self.datos)
+        except sincronizador.ErrorDeNube as e:
+            self.lbl.config(text=str(e), fg=ROJO)
+            return
+        for g in gente:
+            self.tv.insert("", "end", iid=g["correo"],
+                           values=(g["correo"],
+                                   "el dueño" if g.get("rol") == "dueno" else "ayudante",
+                                   N.fecha_corta((g.get("desde") or "")[:10])))
+        self.lbl.config(text="%d persona%s con acceso" % (len(gente),
+                                                          "" if len(gente) == 1 else "s"),
+                        fg=SUAVE)
+
+    def agregar(self):
+        if DialogoNuevoUsuario(self, self.datos).mostrar():
+            self.recargar()
+
+    def quitar(self):
+        sel = self.tv.selection()
+        if not sel:
+            return
+        correo = sel[0]
+        if self.tv.item(correo, "values")[1] == "el dueño":
+            return messagebox.showinfo("No se puede", "El dueño no se puede quitar.",
+                                       parent=self)
+        if not messagebox.askyesno(
+                "Quitar el acceso",
+                "¿Quitarle el acceso a %s?\n\nNo va a poder seguir viendo ni anotando "
+                "en el libro. Lo que ya anotó se queda como está." % correo,
+                icon="warning", parent=self):
+            return
+        try:
+            sincronizador.quitar_acceso(self.datos, correo)
+        except sincronizador.ErrorDeNube as e:
+            return messagebox.showerror("No se pudo", str(e), parent=self)
+        self.recargar()
+
+
+class DialogoNuevoUsuario(Dialogo):
+    """Crea la cuenta de otra persona y le da acceso al local."""
+
+    def __init__(self, padre, datos):
+        Dialogo.__init__(self, padre, "Agregar persona", "Crear y dar acceso")
+        self.datos = datos
+        tk.Label(self.cuerpo, text="Agregar persona", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(self.cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 wraplength=px(380),
+                 text="Se le crea una cuenta con este correo y esta clave. Con eso entra "
+                      "desde su celular. Después él puede cambiarse la clave.").grid(
+            row=1, column=0, sticky="w", pady=(2, 0))
+        self.e_correo = self.campo(1, "CORREO", "Ej: mostrador@elbuencorte.cl", largo=80)
+        self.e_clave = self.campo(2, "CLAVE QUE LE VAS A DAR", "Al menos 6 letras o números")
+
+    def aceptar(self):
+        try:
+            sincronizador.crear_usuario(self.datos, self.e_correo.valor(),
+                                        self.e_clave.valor())
+        except sincronizador.ErrorDeNube as e:
+            raise ValueError(str(e))
+        return True
 
 
 class DialogoCompra(Dialogo):

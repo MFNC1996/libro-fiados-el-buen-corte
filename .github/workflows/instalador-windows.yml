@@ -30,6 +30,9 @@ jobs:
       - name: Probar la ventana en Windows
         run: python probar_ventana.py
 
+      - name: Probar que se comparte con el celular
+        run: python probar_nube.py
+
       - name: Construir el .exe
         run: pyinstaller --noconfirm --clean empaquetado/LibroDeFiados.spec
 
@@ -150,8 +153,8 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.1
-          name: Libro de Fiados 1.2.1
+          tag_name: v2.0.0
+          name: Libro de Fiados 2.0
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 

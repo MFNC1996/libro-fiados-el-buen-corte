@@ -1,0 +1,64 @@
+LIBRO DE FIADOS EN INTERNET  -  como se prepara la cuenta
+=========================================================
+
+Esto se hace UNA sola vez y demora unos 10 minutos. Son pasos de pinchar
+botones en una pagina: no hay que programar nada.
+
+
+1. CREAR LA CUENTA
+   Entra a  https://supabase.com  y crea una cuenta (sirve entrar con
+   GitHub, que ya tienes). Es gratis y no pide tarjeta.
+
+2. CREAR EL PROYECTO
+   Boton "New project".
+   - Name:     libro-de-fiados
+   - Database password: invéntala y GUÁRDALA (no es la clave del dueño,
+     es la de la base de datos; se usa rara vez, pero no se recupera).
+   - Region:   South America (São Paulo)   <- la más cerca de Chile
+   - Plan:     Free
+   Apretar "Create new project" y esperar un par de minutos.
+
+3. CREAR LAS TABLAS
+   Menú de la izquierda -> "SQL Editor" -> "New query".
+   Abre el archivo  nube/esquema.sql , copia TODO su contenido, pégalo
+   ahí y aprieta "Run". Tiene que decir "Success".
+
+4. CREAR EL USUARIO DEL DUEÑO
+   Menú "Authentication" -> "Users" -> "Add user" -> "Create new user".
+   - Email:    el correo del dueño (con ese entra al celular)
+   - Password: una clave para él
+   - Marcar "Auto Confirm User" para que no tenga que confirmar el correo.
+
+5. ENLAZAR EL LOCAL CON ESE USUARIO
+   "SQL Editor" -> "New query". Abre  nube/primer-uso.sql , busca la línea
+   marcada con flechas (>>>> CAMBIAR ESTE CORREO <<<<) y pon ahí el correo
+   del paso 4. Pega todo y "Run".
+   Abajo te va a mostrar una tabla con el "local_id": cópialo.
+   Si el correo está mal escrito, te lo dice con todas sus letras en vez de
+   dejar algo a medio hacer.
+
+6. COPIAR LAS DOS LLAVES
+   Menú "Project Settings" (la rueda) -> "API".
+   Copia estos dos valores:
+   - Project URL          (algo como https://abcdefgh.supabase.co)
+   - anon public          (una clave larga que empieza con "eyJ...")
+
+   Esa clave "anon" es pública a propósito: sola no sirve de nada, porque
+   la base de datos solo entrega lo del local del usuario que inició
+   sesión. La otra clave que aparece ahí ("service_role") NO se usa,
+   NO se copia a ninguna parte y NO se le manda a nadie.
+
+
+LO QUE ME TIENES QUE PASAR
+--------------------------
+   - Project URL
+   - clave anon public
+   - el local_id del paso 5
+   - el correo del dueño (la clave de él no me la mandes: no la necesito)
+
+
+DESPUES
+-------
+   Con eso configuro la aplicación de escritorio y la página del celular.
+   Los datos que ya están anotados en el computador del local se suben
+   solos la primera vez que se abra la versión nueva: no se pierde nada.

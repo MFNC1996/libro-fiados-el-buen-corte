@@ -1,0 +1,173 @@
+/* Los mismos colores y la misma forma que el programa del computador. */
+:root{
+  --rojo:#C8202D; --rojo-osc:#A60D2B; --verde:#1F7A3D; --verde-osc:#165E2E;
+  --ambar:#8A5A00; --ambar-claro:#FBF0DC; --tinta:#1B1715; --papel:#F4F1EC;
+  --blanco:#FFFFFF; --linea:#DED7CF; --suave:#6C625C; --pista:#A39B94;
+  --verde-suave:#F4F9F5; --verde-letra:#4E7A5E;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{margin:0; padding:0}
+body{
+  background:var(--papel); color:var(--tinta);
+  font:15px/1.4 "Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  /* El celular tiene esquinas redondeadas y una barra abajo: aqui se le deja
+     su espacio, para que ninguna letra quede debajo del borde. */
+  padding:env(safe-area-inset-top) env(safe-area-inset-right)
+          env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overflow-x:hidden;
+}
+button,input,select{font:inherit; color:inherit}
+/* 16 px: con menos, el iPhone hace zoom solo al tocar una casilla. */
+input[type=text],input[type=password],input[type=email],input[type=tel]{font-size:16px}
+.oculto{display:none !important}
+
+/* ------------------------------------------------------------- cabecera */
+header{background:var(--blanco); display:flex; align-items:center; gap:12px;
+       padding:8px 14px; position:sticky; top:0; z-index:10}
+header img{width:46px; height:46px; flex:none}
+header .nombre{flex:1; min-width:0}
+header .nombre b{display:block; color:var(--rojo); font:italic 700 20px/1.1 "Segoe UI",system-ui,sans-serif;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+header .nombre span{display:block; color:var(--suave); font-size:8.5px; font-weight:700; letter-spacing:.09em}
+header .total{text-align:right; flex:none}
+header .total span{display:block; color:var(--suave); font-size:8.5px; font-weight:700; letter-spacing:.09em}
+header .total b{display:block; color:var(--rojo-osc); font-size:20px; font-weight:800}
+.franja-verde{height:4px; background:var(--verde)}
+.franja-roja{height:2px; background:var(--rojo-osc)}
+
+/* --------------------------------------------------------------- piezas */
+.tarjeta{background:var(--blanco); border:1px solid var(--linea); margin:10px;
+         padding:12px 14px}
+.rotulo{font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+        color:var(--suave); font-weight:700}
+.boton{display:inline-flex; align-items:center; justify-content:center; gap:6px;
+       border:1px solid var(--linea); background:var(--blanco); color:var(--tinta);
+       font-weight:700; font-size:14px; padding:9px 14px; cursor:pointer;
+       border-radius:2px; min-height:40px}
+.boton:active{background:#EFEAE4}
+.boton.rojo{background:var(--rojo); border-color:var(--rojo); color:#fff}
+.boton.rojo:active{background:var(--rojo-osc)}
+.boton.verde{background:var(--verde); border-color:var(--verde); color:#fff}
+.boton.verde:active{background:var(--verde-osc)}
+.boton.chico{font-size:12.5px; padding:7px 10px; min-height:34px}
+.boton.ancho{width:100%}
+.boton[disabled]{opacity:.45; pointer-events:none}
+input[type=text],input[type=password],input[type=email],input[type=tel]{
+  width:100%; background:var(--blanco); border:1px solid var(--linea);
+  padding:11px 10px; border-radius:2px; outline:none}
+input:focus{border-color:var(--rojo)}
+label.campo{display:block; margin-bottom:10px}
+label.campo .rotulo{display:block; margin-bottom:3px}
+.fila{display:flex; gap:8px; align-items:center}
+.fila > *{min-width:0}
+.aviso{margin:8px 10px; padding:9px 12px; font-size:13.5px; font-weight:700}
+.aviso.ok{background:var(--verde-suave); color:var(--verde); border-left:3px solid var(--verde)}
+.aviso.mal{background:#FBE8E9; color:var(--rojo-osc); border-left:3px solid var(--rojo)}
+
+/* --------------------------------------------------------- lista de clientes */
+.buscador{display:flex; gap:8px; padding:10px 10px 0}
+.cliente{display:flex; align-items:center; gap:10px; width:100%; text-align:left;
+         background:var(--blanco); border:0; border-bottom:1px solid var(--linea);
+         padding:13px 14px; cursor:pointer; min-height:52px}
+.cliente:active{background:#F7F4F0}
+.cliente .quien{flex:1; min-width:0}
+.cliente .quien b{display:block; font-weight:600; font-size:15.5px;
+                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cliente .quien small{color:var(--suave); font-size:12px; display:block;
+                      white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cliente .debe{font-weight:800; white-space:nowrap; font-variant-numeric:tabular-nums}
+.cliente .debe.aldia{color:var(--suave); font-weight:600}
+.lista{border-top:1px solid var(--linea)}
+.vacio{padding:26px 16px; text-align:center; color:var(--suave)}
+
+/* ----------------------------------------------------------- hoja del cliente */
+.volver{display:inline-block; background:none; border:0; color:var(--rojo);
+        font-weight:700; font-size:13px; padding:10px 14px 2px; cursor:pointer}
+.ficha .nombre{font-size:21px; font-weight:700; margin:0; overflow-wrap:anywhere}
+.ficha .datos{color:var(--suave); font-size:13px; margin:2px 0 0; overflow-wrap:anywhere}
+.ficha .deuda{margin-top:10px; display:flex; align-items:flex-end; justify-content:space-between; gap:10px}
+.ficha .deuda .monto{font-size:30px; font-weight:800; color:var(--rojo-osc); line-height:1}
+.ficha .deuda .monto.aldia{color:var(--verde); font-size:24px}
+.ficha .deuda .det{color:var(--suave); font-size:12px}
+.acciones{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap}
+.acciones .boton{flex:1 1 auto}
+
+.anotar{border-left:5px solid var(--rojo)}
+.anotar .rotulo{color:var(--rojo); margin-bottom:8px}
+.anotar .campos{display:grid; grid-template-columns:96px 1fr; gap:8px}
+.anotar .campos .largo{grid-column:1 / -1}
+.anotar .ayuda{color:var(--pista); font-size:11.5px; margin-top:6px}
+
+.pestanas{display:flex; margin:10px 10px 0; gap:2px}
+.pestanas button{flex:1; background:var(--papel); border:0; color:var(--suave);
+                 font-weight:700; font-size:13.5px; padding:11px 6px; cursor:pointer}
+.pestanas button.activa{background:var(--blanco); color:var(--rojo)}
+.filtros{display:flex; gap:6px; padding:10px 10px 0}
+.filtros button{flex:1; background:var(--blanco); border:1px solid var(--linea);
+                color:var(--tinta); font-weight:700; font-size:12.5px; padding:8px 4px;
+                cursor:pointer}
+.filtros button.activa{background:var(--tinta); border-color:var(--tinta); color:#fff}
+
+.compra{display:flex; align-items:center; gap:10px; background:var(--blanco);
+        border-bottom:1px solid var(--linea); padding:11px 14px}
+.compra.pagada{background:var(--verde-suave); color:var(--verde-letra)}
+.compra.parcial{background:var(--ambar-claro); color:var(--ambar)}
+.compra .check{flex:none; background:none; border:0; font-size:19px; cursor:pointer;
+               padding:6px 2px; color:inherit; min-width:34px}
+.compra .que{flex:1; min-width:0}
+.compra .que b{display:block; font-weight:600; font-size:15px; overflow-wrap:anywhere}
+.compra .que small{display:block; font-size:12px; opacity:.85; overflow-wrap:anywhere}
+.compra .plata{text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums}
+.compra .plata b{display:block; font-weight:700}
+.compra .plata small{font-size:11.5px; opacity:.85}
+.compra .mas{flex:none; background:none; border:0; color:var(--suave); font-size:18px;
+             cursor:pointer; padding:6px; min-width:32px}
+
+/* --------------------------------------------------------------- ventanitas */
+.fondo{position:fixed; inset:0; background:rgba(27,23,21,.45); display:flex;
+       align-items:flex-end; justify-content:center; z-index:30}
+.ventanita{background:var(--blanco); width:100%; max-width:460px;
+           padding:18px 16px calc(16px + env(safe-area-inset-bottom));
+           max-height:88vh; overflow:auto}
+.ventanita h2{margin:0 0 4px; font-size:19px}
+.ventanita .sub{color:var(--suave); font-size:13.5px; margin:0 0 14px}
+.ventanita .pie{display:flex; gap:8px; margin-top:16px}
+.ventanita .pie .boton{flex:1}
+.ventanita .previa{margin-top:10px; font-weight:700; color:var(--verde); font-size:14px}
+.ventanita .error{margin-top:10px; color:var(--rojo); font-weight:700; font-size:13.5px}
+
+/* --------------------------------------------------------------- entrar */
+.entrar{max-width:420px; margin:0 auto; padding:24px 18px}
+.entrar img{display:block; width:150px; height:150px; margin:10px auto 14px}
+.entrar h1{text-align:center; color:var(--rojo); font:italic 700 24px/1.1 "Segoe UI",sans-serif;
+           margin:0}
+.entrar p.sub{text-align:center; color:var(--suave); font-size:11px; font-weight:700;
+              letter-spacing:.1em; margin:4px 0 22px}
+
+footer{padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+        text-align:center; color:var(--pista); font-size:11px}
+
+/* Opciones de la lista, resumen del mes y el aviso para instalarla */
+.opciones{display:flex; gap:16px; padding:10px 12px 2px; color:var(--suave); font-size:13px;
+          flex-wrap:wrap}
+.opciones label{display:flex; align-items:center; gap:6px; min-height:34px}
+.opciones input{width:17px; height:17px}
+.resumen{margin:2px 12px 8px; color:var(--suave); font-size:12.5px}
+.resumen b{color:var(--tinta)}
+.instalar{display:flex; align-items:center; gap:12px; margin:12px; padding:12px;
+          background:var(--blanco); border:1px solid var(--linea)}
+.instalar img{width:44px; height:44px; flex:none}
+.instalar div{flex:1; min-width:0}
+.instalar b{display:block; font-size:14px}
+.instalar small{color:var(--suave); font-size:12px}
+.pasos{margin:0; padding-left:20px; color:var(--tinta); font-size:14.5px; line-height:1.6}
+.pasos li{margin:6px 0}
+
+/* En pantalla grande se ve como en el computador: lista a la izquierda. */
+@media (min-width:900px){
+  body{max-width:1200px; margin:0 auto; background:var(--blanco)}
+  .doble{display:grid; grid-template-columns:320px 1fr; align-items:start}
+  .doble > .panel{border-right:1px solid var(--linea); min-height:calc(100vh - 120px)}
+  .doble > .hoja{background:var(--papel); min-height:calc(100vh - 120px)}
+  .volver{display:none}
+}

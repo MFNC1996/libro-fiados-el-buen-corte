@@ -24,7 +24,8 @@ import pathlib
 import re
 import sqlite3
 import sys
-from datetime import date, datetime, timedelta
+import uuid
+from datetime import date, datetime, timedelta, timezone
 
 NOMBRE_APP = "Libro de Fiados"
 NEGOCIO = "Carnicería El Buen Corte"
@@ -221,6 +222,16 @@ def ahora_txt():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def ahora_utc():
+    """
+    La hora en formato universal, que es como la guarda el servidor.
+
+    Se usa para saber que cambio primero cuando el computador y el celular
+    anotan casi al mismo tiempo; por eso no puede ser la hora del pais.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
 def telefono_whatsapp(telefono):
     """
     Numero para abrir WhatsApp, o None. Pensado para Chile:
@@ -241,51 +252,259 @@ def telefono_whatsapp(telefono):
 
 # --------------------------------------------------------------------- datos
 class Datos(object):
+    """
+    El libro, guardado en el computador.
+
+    Desde la version 2 cada fila lleva tres cosas mas, para poder compartir el
+    libro entre el computador del local y el celular:
+
+        id           un codigo unico (uuid), no un numero corrido. Asi dos
+                     dispositivos pueden anotar a la vez sin pisarse.
+        actualizado  cuando cambio por ultima vez. Sincronizar es preguntar
+                     "dame lo que cambio despues de tal hora".
+        borrado      nada se borra de verdad: se marca. Si no, un dispositivo
+                     que estuvo sin internet reviviria lo que el otro borro.
+
+    Ademas se anota en "pendientes" cada fila que cambio aqui y todavia no se
+    ha subido. El computador sigue funcionando sin internet: anota igual, y
+    cuando vuelve la conexion sube lo pendiente.
+    """
+
+    TABLAS = ("clientes", "compras", "pagos", "aplicaciones")
+    # Lo minimo que tiene que traer una fila nueva que llega del servidor.
+    OBLIGATORIAS = {"clientes": ("nombre",),
+                    "compras": ("cliente_id", "fecha", "monto"),
+                    "pagos": ("cliente_id", "fecha", "monto"),
+                    "aplicaciones": ("pago_id", "compra_id", "monto")}
+
     def __init__(self, ruta=None):
         self.ruta = ruta or os.path.join(carpeta_datos(), "fiados.sqlite3")
         self.cx = sqlite3.connect(self.ruta)
         self.cx.row_factory = sqlite3.Row
         self.cx.execute("PRAGMA journal_mode=WAL")
         self.cx.execute("PRAGMA foreign_keys=ON")
+        # La ventana y el sincronizador usan el mismo archivo: si uno esta
+        # escribiendo, el otro espera un momento en vez de dar error.
+        self.cx.execute("PRAGMA busy_timeout=5000")
+        self.local_id = ""
         self._preparar()
+        self.local_id = self.config("local_id", "")
 
+    # -- armado y migracion ----------------------------------------------
     def _preparar(self):
         c = self.cx
+        if self._hay_base_vieja():
+            self._apartar_base_vieja()
         c.execute("""CREATE TABLE IF NOT EXISTS clientes (
-                       id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                       nombre    TEXT    NOT NULL,
-                       telefono  TEXT    NOT NULL DEFAULT '',
-                       nota      TEXT    NOT NULL DEFAULT '',
-                       activo    INTEGER NOT NULL DEFAULT 1,
-                       creado    TEXT    NOT NULL DEFAULT '')""")
-        # Lo que se anoto: que se llevo y cuanto vale. El monto es en pesos
-        # enteros, sin decimales.
+                       id          TEXT    PRIMARY KEY,
+                       local_id    TEXT    NOT NULL DEFAULT '',
+                       nombre      TEXT    NOT NULL,
+                       telefono    TEXT    NOT NULL DEFAULT '',
+                       nota        TEXT    NOT NULL DEFAULT '',
+                       activo      INTEGER NOT NULL DEFAULT 1,
+                       borrado     INTEGER NOT NULL DEFAULT 0,
+                       creado      TEXT    NOT NULL DEFAULT '',
+                       actualizado TEXT    NOT NULL DEFAULT '')""")
         c.execute("""CREATE TABLE IF NOT EXISTS compras (
-                       id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                       cliente_id INTEGER NOT NULL REFERENCES clientes(id),
-                       fecha      TEXT    NOT NULL,
-                       detalle    TEXT    NOT NULL DEFAULT '',
-                       monto      INTEGER NOT NULL,
-                       creado     TEXT    NOT NULL DEFAULT '')""")
-        c.execute("CREATE INDEX IF NOT EXISTS ix_compras ON compras(cliente_id, fecha)")
-        # La plata que entrego el cliente.
+                       id          TEXT    PRIMARY KEY,
+                       local_id    TEXT    NOT NULL DEFAULT '',
+                       cliente_id  TEXT    NOT NULL REFERENCES clientes(id),
+                       fecha       TEXT    NOT NULL,
+                       detalle     TEXT    NOT NULL DEFAULT '',
+                       monto       INTEGER NOT NULL,
+                       borrado     INTEGER NOT NULL DEFAULT 0,
+                       creado      TEXT    NOT NULL DEFAULT '',
+                       actualizado TEXT    NOT NULL DEFAULT '')""")
         c.execute("""CREATE TABLE IF NOT EXISTS pagos (
-                       id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                       cliente_id INTEGER NOT NULL REFERENCES clientes(id),
-                       fecha      TEXT    NOT NULL,
-                       monto      INTEGER NOT NULL,
-                       nota       TEXT    NOT NULL DEFAULT '',
-                       creado     TEXT    NOT NULL DEFAULT '')""")
-        c.execute("CREATE INDEX IF NOT EXISTS ix_pagos ON pagos(cliente_id, fecha)")
-        # Cuanto de cada pago fue a cada compra.
+                       id          TEXT    PRIMARY KEY,
+                       local_id    TEXT    NOT NULL DEFAULT '',
+                       cliente_id  TEXT    NOT NULL REFERENCES clientes(id),
+                       fecha       TEXT    NOT NULL,
+                       monto       INTEGER NOT NULL,
+                       nota        TEXT    NOT NULL DEFAULT '',
+                       borrado     INTEGER NOT NULL DEFAULT 0,
+                       creado      TEXT    NOT NULL DEFAULT '',
+                       actualizado TEXT    NOT NULL DEFAULT '')""")
         c.execute("""CREATE TABLE IF NOT EXISTS aplicaciones (
-                       id        INTEGER PRIMARY KEY AUTOINCREMENT,
-                       pago_id   INTEGER NOT NULL REFERENCES pagos(id) ON DELETE CASCADE,
-                       compra_id INTEGER NOT NULL REFERENCES compras(id),
-                       monto     INTEGER NOT NULL)""")
+                       id          TEXT    PRIMARY KEY,
+                       local_id    TEXT    NOT NULL DEFAULT '',
+                       pago_id     TEXT    NOT NULL REFERENCES pagos(id),
+                       compra_id   TEXT    NOT NULL REFERENCES compras(id),
+                       monto       INTEGER NOT NULL,
+                       borrado     INTEGER NOT NULL DEFAULT 0,
+                       creado      TEXT    NOT NULL DEFAULT '',
+                       actualizado TEXT    NOT NULL DEFAULT '')""")
+        # Lo que cambio aqui y falta subir.
+        c.execute("""CREATE TABLE IF NOT EXISTS pendientes (
+                       tabla TEXT NOT NULL,
+                       id    TEXT NOT NULL,
+                       PRIMARY KEY (tabla, id))""")
+        # Ajustes locales: a que local pertenece, hasta donde se sincronizo.
+        c.execute("""CREATE TABLE IF NOT EXISTS ajustes (
+                       clave TEXT PRIMARY KEY,
+                       valor TEXT NOT NULL DEFAULT '')""")
+        for t in ("compras", "pagos"):
+            c.execute("CREATE INDEX IF NOT EXISTS ix_%s ON %s(cliente_id, fecha)" % (t, t))
         c.execute("CREATE INDEX IF NOT EXISTS ix_apl_compra ON aplicaciones(compra_id)")
         c.execute("CREATE INDEX IF NOT EXISTS ix_apl_pago ON aplicaciones(pago_id)")
         c.commit()
+        self._copiar_base_vieja()
+
+    def _hay_base_vieja(self):
+        """True si el archivo es de la version 1 (numeros corridos)."""
+        cols = [f[1] for f in self.cx.execute("PRAGMA table_info(clientes)")]
+        return bool(cols) and "borrado" not in cols
+
+    def _apartar_base_vieja(self):
+        """Las tablas viejas se guardan aparte, para copiarlas y no perderlas."""
+        with self.cx:
+            for t in self.TABLAS:
+                self.cx.execute("ALTER TABLE %s RENAME TO %s_v1" % (t, t))
+
+    def _copiar_base_vieja(self):
+        """
+        Pasa lo anotado en la version 1 a la forma nueva: a cada fila se le da
+        su codigo unico, y queda marcada para subirse a internet la primera vez
+        que haya conexion. No se pierde ni una compra.
+        """
+        if not self.cx.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name='clientes_v1'").fetchone():
+            return 0
+        if self.config("copiada_la_version_1"):
+            return 0
+        ahora, copiadas = ahora_utc(), 0
+        nuevos = {"clientes": {}, "compras": {}, "pagos": {}}
+        with self.cx:
+            for v in self.cx.execute("SELECT * FROM clientes_v1 ORDER BY id"):
+                nid = self._id()
+                nuevos["clientes"][v["id"]] = nid
+                self.cx.execute(
+                    "INSERT INTO clientes (id, local_id, nombre, telefono, nota, activo, "
+                    "creado, actualizado) VALUES (?,?,?,?,?,?,?,?)",
+                    (nid, self.local_id, v["nombre"], v["telefono"], v["nota"],
+                     v["activo"], _creado_iso(v["creado"]), ahora))
+                self._marcar("clientes", nid)
+                copiadas += 1
+            for v in self.cx.execute("SELECT * FROM compras_v1 ORDER BY id"):
+                nid = self._id()
+                nuevos["compras"][v["id"]] = nid
+                self.cx.execute(
+                    "INSERT INTO compras (id, local_id, cliente_id, fecha, detalle, monto, "
+                    "creado, actualizado) VALUES (?,?,?,?,?,?,?,?)",
+                    (nid, self.local_id, nuevos["clientes"][v["cliente_id"]], v["fecha"],
+                     v["detalle"], v["monto"], _creado_iso(v["creado"]), ahora))
+                self._marcar("compras", nid)
+                copiadas += 1
+            for v in self.cx.execute("SELECT * FROM pagos_v1 ORDER BY id"):
+                nid = self._id()
+                nuevos["pagos"][v["id"]] = nid
+                self.cx.execute(
+                    "INSERT INTO pagos (id, local_id, cliente_id, fecha, monto, nota, "
+                    "creado, actualizado) VALUES (?,?,?,?,?,?,?,?)",
+                    (nid, self.local_id, nuevos["clientes"][v["cliente_id"]], v["fecha"],
+                     v["monto"], v["nota"], _creado_iso(v["creado"]), ahora))
+                self._marcar("pagos", nid)
+                copiadas += 1
+            for v in self.cx.execute("SELECT * FROM aplicaciones_v1 ORDER BY id"):
+                nid = self._id()
+                self.cx.execute(
+                    "INSERT INTO aplicaciones (id, local_id, pago_id, compra_id, monto, "
+                    "creado, actualizado) VALUES (?,?,?,?,?,?,?)",
+                    (nid, self.local_id, nuevos["pagos"][v["pago_id"]],
+                     nuevos["compras"][v["compra_id"]], v["monto"], ahora, ahora))
+                self._marcar("aplicaciones", nid)
+                copiadas += 1
+        self.guardar_config("copiada_la_version_1", ahora)
+        return copiadas
+
+    # -- ajustes y sincronizacion ----------------------------------------
+    def config(self, clave, defecto=""):
+        f = self.cx.execute("SELECT valor FROM ajustes WHERE clave=?", (clave,)).fetchone()
+        return f["valor"] if f else defecto
+
+    def guardar_config(self, clave, valor):
+        with self.cx:
+            self.cx.execute("INSERT INTO ajustes (clave, valor) VALUES (?,?) "
+                            "ON CONFLICT(clave) DO UPDATE SET valor=excluded.valor",
+                            (clave, str(valor)))
+        if clave == "local_id":
+            self.local_id = str(valor)
+
+    def _id(self):
+        return str(uuid.uuid4())
+
+    def _marcar(self, tabla, *ids):
+        """Deja anotado que estas filas hay que subirlas."""
+        for i in ids:
+            self.cx.execute("INSERT OR IGNORE INTO pendientes (tabla, id) VALUES (?,?)",
+                            (tabla, i))
+
+    def _tocar(self, tabla, *ids):
+        """Pone la hora de cambio y marca para subir."""
+        ahora = ahora_utc()
+        for i in ids:
+            self.cx.execute("UPDATE %s SET actualizado=? WHERE id=?" % tabla, (ahora, i))
+        self._marcar(tabla, *ids)
+
+    def hay_pendientes(self):
+        return self.cx.execute("SELECT COUNT(*) FROM pendientes").fetchone()[0]
+
+    def filas_pendientes(self, tabla):
+        """Las filas completas que faltan por subir, listas para mandar."""
+        return [dict(f) for f in self.cx.execute(
+            "SELECT t.* FROM %s t JOIN pendientes p ON p.id = t.id AND p.tabla = ?"
+            % tabla, (tabla,))]
+
+    def olvidar_pendientes(self, tabla, ids):
+        with self.cx:
+            for i in ids:
+                self.cx.execute("DELETE FROM pendientes WHERE tabla=? AND id=?", (tabla, i))
+
+    def guardar_de_la_nube(self, tabla, filas):
+        """
+        Guarda lo que llego del servidor. Gana siempre lo del servidor, salvo
+        en una fila que aqui este pendiente de subir: esa se respeta hasta que
+        alcance a subirse.
+        """
+        if tabla not in self.TABLAS or not filas:
+            return 0
+        columnas = [f[1] for f in self.cx.execute("PRAGMA table_info(%s)" % tabla)]
+        guardadas = 0
+        with self.cx:
+            for fila in filas:
+                fid = fila.get("id")
+                if not fid:
+                    continue
+                pendiente = self.cx.execute(
+                    "SELECT 1 FROM pendientes WHERE tabla=? AND id=?", (tabla, fid)).fetchone()
+                if pendiente:
+                    continue
+                datos = {}
+                for k in columnas:
+                    if k in fila:
+                        v = fila[k]
+                        if k in ("borrado", "activo"):
+                            v = 1 if v in (True, 1, "true", "t") else 0
+                        datos[k] = v
+                existe = self.cx.execute(
+                    "SELECT 1 FROM %s WHERE id=?" % tabla, (fid,)).fetchone()
+                if existe:
+                    campos = ", ".join("%s=?" % k for k in datos if k != "id")
+                    if not campos:
+                        continue
+                    self.cx.execute("UPDATE %s SET %s WHERE id=?" % (tabla, campos),
+                                    [v for k, v in datos.items() if k != "id"] + [fid])
+                else:
+                    faltan = [k for k in self.OBLIGATORIAS[tabla] if k not in datos]
+                    if faltan:
+                        continue        # fila incompleta: se ignora, no se inventa nada
+                    campos = ", ".join(datos)
+                    huecos = ", ".join("?" * len(datos))
+                    self.cx.execute("INSERT INTO %s (%s) VALUES (%s)"
+                                    % (tabla, campos, huecos), list(datos.values()))
+                guardadas += 1
+        return guardadas
 
     def cerrar(self):
         self.cx.close()
@@ -300,11 +519,11 @@ class Datos(object):
                         THEN c.fecha END)                              AS mas_antigua,
                MAX(c.fecha)                                            AS ultima_compra,
                (SELECT MAX(p.fecha) FROM pagos p
-                 WHERE p.cliente_id = cl.id)                           AS ultimo_pago
+                 WHERE p.cliente_id = cl.id AND p.borrado = 0)         AS ultimo_pago
           FROM clientes cl
-          LEFT JOIN compras c ON c.cliente_id = cl.id
+          LEFT JOIN compras c ON c.cliente_id = cl.id AND c.borrado = 0
           LEFT JOIN (SELECT compra_id, SUM(monto) AS abonado
-                       FROM aplicaciones GROUP BY compra_id) a
+                       FROM aplicaciones WHERE borrado = 0 GROUP BY compra_id) a
                  ON a.compra_id = c.id
     """
 
@@ -314,7 +533,8 @@ class Datos(object):
         con archivados=True, tambien los archivados.
         """
         filas = self.cx.execute(
-            self._SQL_CLIENTES + ("" if archivados else " WHERE cl.activo = 1") +
+            self._SQL_CLIENTES + " WHERE cl.borrado = 0" +
+            ("" if archivados else " AND cl.activo = 1") +
             " GROUP BY cl.id ORDER BY cl.nombre COLLATE NOCASE").fetchall()
         lista = [dict(f) for f in filas]
         b = _sin_tildes(buscar).strip()
@@ -325,12 +545,14 @@ class Datos(object):
         return lista
 
     def cliente(self, cid):
-        f = self.cx.execute(self._SQL_CLIENTES + " WHERE cl.id = ? GROUP BY cl.id",
-                            (cid,)).fetchone()
+        f = self.cx.execute(
+            self._SQL_CLIENTES + " WHERE cl.id = ? AND cl.borrado = 0 GROUP BY cl.id",
+            (cid,)).fetchone()
         return dict(f) if f else None
 
     def _nombre_ocupado(self, nombre, salvo=None):
-        for f in self.cx.execute("SELECT id, nombre FROM clientes WHERE activo = 1"):
+        for f in self.cx.execute(
+                "SELECT id, nombre FROM clientes WHERE activo = 1 AND borrado = 0"):
             if f["id"] != salvo and _sin_tildes(f["nombre"]).strip() == \
                     _sin_tildes(nombre).strip():
                 return True
@@ -344,12 +566,15 @@ class Datos(object):
             raise ValueError("Ya hay un cliente que se llama \"%s\".\n\n"
                              "Agrégale algo para distinguirlos, por ejemplo el "
                              "apellido o de dónde es." % nombre)
+        nuevo = self._id()
         with self.cx:
-            cur = self.cx.execute(
-                "INSERT INTO clientes (nombre, telefono, nota, creado) VALUES (?,?,?,?)",
-                (nombre, str(telefono or "").strip(), str(nota or "").strip(),
-                 ahora_txt()))
-        return cur.lastrowid
+            self.cx.execute(
+                "INSERT INTO clientes (id, local_id, nombre, telefono, nota, creado, "
+                "actualizado) VALUES (?,?,?,?,?,?,?)",
+                (nuevo, self.local_id, nombre, str(telefono or "").strip(),
+                 str(nota or "").strip(), ahora_utc(), ahora_utc()))
+            self._marcar("clientes", nuevo)
+        return nuevo
 
     def editar_cliente(self, cid, nombre, telefono="", nota=""):
         nombre = " ".join(str(nombre or "").split())
@@ -361,6 +586,7 @@ class Datos(object):
             self.cx.execute("UPDATE clientes SET nombre=?, telefono=?, nota=? WHERE id=?",
                             (nombre, str(telefono or "").strip(),
                              str(nota or "").strip(), cid))
+            self._tocar("clientes", cid)
 
     def quitar_cliente(self, cid):
         """
@@ -376,13 +602,16 @@ class Datos(object):
             raise ValueError("%s todavía debe %s.\n\nNo se puede quitar a alguien "
                              "que tiene deuda." % (cl["nombre"], pesos(cl["deuda"])))
         tiene = self.cx.execute(
-            "SELECT (SELECT COUNT(*) FROM compras WHERE cliente_id=?) + "
-            "(SELECT COUNT(*) FROM pagos WHERE cliente_id=?)", (cid, cid)).fetchone()[0]
+            "SELECT (SELECT COUNT(*) FROM compras WHERE cliente_id=? AND borrado=0) + "
+            "(SELECT COUNT(*) FROM pagos WHERE cliente_id=? AND borrado=0)",
+            (cid, cid)).fetchone()[0]
         with self.cx:
             if tiene:
                 self.cx.execute("UPDATE clientes SET activo=0 WHERE id=?", (cid,))
+                self._tocar("clientes", cid)
                 return "archivado"
-            self.cx.execute("DELETE FROM clientes WHERE id=?", (cid,))
+            self.cx.execute("UPDATE clientes SET borrado=1 WHERE id=?", (cid,))
+            self._tocar("clientes", cid)
             return "borrado"
 
     def reactivar_cliente(self, cid):
@@ -392,13 +621,15 @@ class Datos(object):
                              "Cámbiale el nombre a uno de los dos primero." % cl["nombre"])
         with self.cx:
             self.cx.execute("UPDATE clientes SET activo=1 WHERE id=?", (cid,))
+            self._tocar("clientes", cid)
 
     # -- compras ---------------------------------------------------------
     def _compra(self, compra_id):
         f = self.cx.execute(
             """SELECT c.*, COALESCE((SELECT SUM(monto) FROM aplicaciones
-                                      WHERE compra_id = c.id), 0) AS abonado
-                 FROM compras c WHERE c.id = ?""", (compra_id,)).fetchone()
+                                      WHERE compra_id = c.id AND borrado = 0), 0) AS abonado
+                 FROM compras c WHERE c.id = ? AND c.borrado = 0""",
+            (compra_id,)).fetchone()
         if not f:
             raise ValueError("Esa anotación ya no existe.")
         return _con_estado(dict(f))
@@ -413,11 +644,11 @@ class Datos(object):
                       COALESCE(SUM(a.monto), 0) AS abonado,
                       MAX(p.fecha)              AS pagada_el
                  FROM compras c
-                 LEFT JOIN aplicaciones a ON a.compra_id = c.id
-                 LEFT JOIN pagos p        ON p.id = a.pago_id
-                WHERE c.cliente_id = ?
+                 LEFT JOIN aplicaciones a ON a.compra_id = c.id AND a.borrado = 0
+                 LEFT JOIN pagos p        ON p.id = a.pago_id AND p.borrado = 0
+                WHERE c.cliente_id = ? AND c.borrado = 0
                 GROUP BY c.id
-                ORDER BY c.fecha DESC, c.id DESC""", (cid,)).fetchall()
+                ORDER BY c.fecha DESC, c.creado DESC""", (cid,)).fetchall()
         lista = [_con_estado(dict(f)) for f in filas]
         if filtro == "pendientes":
             lista = [x for x in lista if x["estado"] != PAGADA]
@@ -431,12 +662,15 @@ class Datos(object):
         fecha = fecha or date.today().isoformat()
         if not self.cliente(cid):
             raise ValueError("Ese cliente ya no existe.")
+        nueva = self._id()
         with self.cx:
-            cur = self.cx.execute(
-                "INSERT INTO compras (cliente_id, fecha, detalle, monto, creado) "
-                "VALUES (?,?,?,?,?)",
-                (cid, fecha, " ".join(str(detalle or "").split()), monto, ahora_txt()))
-        return cur.lastrowid
+            self.cx.execute(
+                "INSERT INTO compras (id, local_id, cliente_id, fecha, detalle, monto, "
+                "creado, actualizado) VALUES (?,?,?,?,?,?,?,?)",
+                (nueva, self.local_id, cid, fecha,
+                 " ".join(str(detalle or "").split()), monto, ahora_utc(), ahora_utc()))
+            self._marcar("compras", nueva)
+        return nueva
 
     def editar_compra(self, compra_id, fecha, detalle, monto):
         monto = _monto_valido(monto)
@@ -450,6 +684,7 @@ class Datos(object):
             self.cx.execute("UPDATE compras SET fecha=?, detalle=?, monto=? WHERE id=?",
                             (fecha, " ".join(str(detalle or "").split()), monto,
                              compra_id))
+            self._tocar("compras", compra_id)
 
     def borrar_compra(self, compra_id):
         c = self._compra(compra_id)
@@ -458,7 +693,8 @@ class Datos(object):
                 "Esta compra tiene %s abonados.\n\nPrimero márcala como pendiente "
                 "(eso quita el abono) y despues la puedes borrar." % pesos(c["abonado"]))
         with self.cx:
-            self.cx.execute("DELETE FROM compras WHERE id=?", (compra_id,))
+            self.cx.execute("UPDATE compras SET borrado=1 WHERE id=?", (compra_id,))
+            self._tocar("compras", compra_id)
 
     # -- pagos -----------------------------------------------------------
     def marcar_pagada(self, compra_id, fecha=None, nota=""):
@@ -470,14 +706,19 @@ class Datos(object):
         if c["falta"] <= 0:
             return 0
         fecha = fecha or date.today().isoformat()
+        pago, apl = self._id(), self._id()
         with self.cx:
-            cur = self.cx.execute(
-                "INSERT INTO pagos (cliente_id, fecha, monto, nota, creado) "
-                "VALUES (?,?,?,?,?)",
-                (c["cliente_id"], fecha, c["falta"], nota or "", ahora_txt()))
             self.cx.execute(
-                "INSERT INTO aplicaciones (pago_id, compra_id, monto) VALUES (?,?,?)",
-                (cur.lastrowid, compra_id, c["falta"]))
+                "INSERT INTO pagos (id, local_id, cliente_id, fecha, monto, nota, creado, "
+                "actualizado) VALUES (?,?,?,?,?,?,?,?)",
+                (pago, self.local_id, c["cliente_id"], fecha, c["falta"], nota or "",
+                 ahora_utc(), ahora_utc()))
+            self.cx.execute(
+                "INSERT INTO aplicaciones (id, local_id, pago_id, compra_id, monto, "
+                "creado, actualizado) VALUES (?,?,?,?,?,?,?)",
+                (apl, self.local_id, pago, compra_id, c["falta"], ahora_utc(), ahora_utc()))
+            self._marcar("pagos", pago)
+            self._marcar("aplicaciones", apl)
         return c["falta"]
 
     def marcar_pendiente(self, compra_id):
@@ -491,13 +732,19 @@ class Datos(object):
             return 0
         with self.cx:
             apls = self.cx.execute(
-                "SELECT pago_id, SUM(monto) AS monto FROM aplicaciones "
-                "WHERE compra_id=? GROUP BY pago_id", (compra_id,)).fetchall()
-            self.cx.execute("DELETE FROM aplicaciones WHERE compra_id=?", (compra_id,))
+                "SELECT id, pago_id, monto FROM aplicaciones "
+                "WHERE compra_id=? AND borrado=0", (compra_id,)).fetchall()
             for a in apls:
+                self.cx.execute("UPDATE aplicaciones SET borrado=1 WHERE id=?", (a["id"],))
+                self._tocar("aplicaciones", a["id"])
                 self.cx.execute("UPDATE pagos SET monto = monto - ? WHERE id=?",
                                 (a["monto"], a["pago_id"]))
-            self.cx.execute("DELETE FROM pagos WHERE monto <= 0")
+                self._tocar("pagos", a["pago_id"])
+            vacios = [f["id"] for f in self.cx.execute(
+                "SELECT id FROM pagos WHERE monto <= 0 AND borrado = 0")]
+            for pid in vacios:
+                self.cx.execute("UPDATE pagos SET borrado=1, monto=1 WHERE id=?", (pid,))
+                self._tocar("pagos", pid)
         return c["abonado"]
 
     def recibir_pago(self, cid, monto, fecha=None, nota="", compras=None):
@@ -512,7 +759,7 @@ class Datos(object):
         monto = _monto_valido(monto)
         fecha = fecha or date.today().isoformat()
         pendientes = sorted(self.compras_de(cid, "pendientes"),
-                            key=lambda x: (x["fecha"], x["id"]))
+                            key=lambda x: (x["fecha"], x["creado"]))
         if compras is not None:
             orden = {compra_id: i for i, compra_id in enumerate(compras)}
             pendientes = sorted([x for x in pendientes if x["id"] in orden],
@@ -525,18 +772,24 @@ class Datos(object):
                              "saldo a favor: recibe como máximo %s y entrega el "
                              "vuelto." % (pesos(monto), pesos(deuda), pesos(deuda)))
         resto, saldadas, abonada = monto, 0, None
+        pid = self._id()
         with self.cx:
-            cur = self.cx.execute(
-                "INSERT INTO pagos (cliente_id, fecha, monto, nota, creado) "
-                "VALUES (?,?,?,?,?)", (cid, fecha, monto, nota or "", ahora_txt()))
-            pid = cur.lastrowid
+            self.cx.execute(
+                "INSERT INTO pagos (id, local_id, cliente_id, fecha, monto, nota, creado, "
+                "actualizado) VALUES (?,?,?,?,?,?,?,?)",
+                (pid, self.local_id, cid, fecha, monto, nota or "", ahora_utc(),
+                 ahora_utc()))
+            self._marcar("pagos", pid)
             for x in pendientes:
                 if resto <= 0:
                     break
                 parte = min(resto, x["falta"])
+                apl = self._id()
                 self.cx.execute(
-                    "INSERT INTO aplicaciones (pago_id, compra_id, monto) VALUES (?,?,?)",
-                    (pid, x["id"], parte))
+                    "INSERT INTO aplicaciones (id, local_id, pago_id, compra_id, monto, "
+                    "creado, actualizado) VALUES (?,?,?,?,?,?,?)",
+                    (apl, self.local_id, pid, x["id"], parte, ahora_utc(), ahora_utc()))
+                self._marcar("aplicaciones", apl)
                 resto -= parte
                 if parte == x["falta"]:
                     saldadas += 1
@@ -548,25 +801,34 @@ class Datos(object):
     def pagos_de(self, cid):
         """Pagos recibidos de un cliente, del mas nuevo al mas viejo."""
         filas = self.cx.execute(
-            "SELECT * FROM pagos WHERE cliente_id=? ORDER BY fecha DESC, id DESC",
-            (cid,)).fetchall()
+            "SELECT * FROM pagos WHERE cliente_id=? AND borrado=0 "
+            "ORDER BY fecha DESC, creado DESC", (cid,)).fetchall()
         lista = []
         for f in filas:
             p = dict(f)
             apl = self.cx.execute(
                 """SELECT c.detalle, c.fecha, a.monto, c.monto AS total
                      FROM aplicaciones a JOIN compras c ON c.id = a.compra_id
-                    WHERE a.pago_id = ? ORDER BY c.fecha, c.id""", (p["id"],)).fetchall()
+                    WHERE a.pago_id = ? AND a.borrado = 0 AND c.borrado = 0
+                    ORDER BY c.fecha, c.creado""", (p["id"],)).fetchall()
             p["aplicaciones"] = [dict(a) for a in apl]
             lista.append(p)
         return lista
 
     def borrar_pago(self, pago_id):
         """Deshace un pago: las compras que cubria vuelven a quedar pendientes."""
-        with self.cx:
-            n = self.cx.execute("DELETE FROM pagos WHERE id=?", (pago_id,)).rowcount
-        if not n:
+        f = self.cx.execute("SELECT id FROM pagos WHERE id=? AND borrado=0",
+                            (pago_id,)).fetchone()
+        if not f:
             raise ValueError("Ese pago ya no existe.")
+        with self.cx:
+            apls = [a["id"] for a in self.cx.execute(
+                "SELECT id FROM aplicaciones WHERE pago_id=? AND borrado=0", (pago_id,))]
+            for a in apls:
+                self.cx.execute("UPDATE aplicaciones SET borrado=1 WHERE id=?", (a,))
+                self._tocar("aplicaciones", a)
+            self.cx.execute("UPDATE pagos SET borrado=1 WHERE id=?", (pago_id,))
+            self._tocar("pagos", pago_id)
 
     # -- totales ---------------------------------------------------------
     def deuda(self, cid):
@@ -579,11 +841,11 @@ class Datos(object):
         clientes = self.clientes()
         deben = [c for c in clientes if c["deuda"] > 0]
         fiado_mes = self.cx.execute(
-            "SELECT COALESCE(SUM(monto),0) FROM compras WHERE substr(fecha,1,7)=?",
-            (mes,)).fetchone()[0]
+            "SELECT COALESCE(SUM(monto),0) FROM compras "
+            "WHERE substr(fecha,1,7)=? AND borrado=0", (mes,)).fetchone()[0]
         cobrado_mes = self.cx.execute(
-            "SELECT COALESCE(SUM(monto),0) FROM pagos WHERE substr(fecha,1,7)=?",
-            (mes,)).fetchone()[0]
+            "SELECT COALESCE(SUM(monto),0) FROM pagos "
+            "WHERE substr(fecha,1,7)=? AND borrado=0", (mes,)).fetchone()[0]
         return {
             "por_cobrar": sum(c["deuda"] for c in deben),
             "clientes": len(clientes),
@@ -600,11 +862,13 @@ class Datos(object):
         saldo que iba quedando. Para el estado de cuenta impreso.
         """
         mov = []
-        for c in self.cx.execute("SELECT * FROM compras WHERE cliente_id=?", (cid,)):
+        for c in self.cx.execute(
+                "SELECT * FROM compras WHERE cliente_id=? AND borrado=0", (cid,)):
             mov.append({"fecha": c["fecha"], "orden": (c["creado"], 0, c["id"]),
                         "tipo": "compra", "detalle": c["detalle"], "cargo": c["monto"],
                         "abono": 0})
-        for p in self.cx.execute("SELECT * FROM pagos WHERE cliente_id=?", (cid,)):
+        for p in self.cx.execute(
+                "SELECT * FROM pagos WHERE cliente_id=? AND borrado=0", (cid,)):
             mov.append({"fecha": p["fecha"], "orden": (p["creado"], 1, p["id"]),
                         "tipo": "pago", "detalle": p["nota"] or "Pago",
                         "cargo": 0, "abono": p["monto"]})
@@ -617,7 +881,8 @@ class Datos(object):
         return mov
 
     def total_clientes(self):
-        return self.cx.execute("SELECT COUNT(*) FROM clientes").fetchone()[0]
+        return self.cx.execute(
+            "SELECT COUNT(*) FROM clientes WHERE borrado=0").fetchone()[0]
 
     # -- respaldos -------------------------------------------------------
     def carpeta_respaldos(self):
@@ -678,7 +943,9 @@ class Datos(object):
         try:
             otro = _abrir_solo_lectura(ruta)
             try:
-                n = [otro.execute("SELECT COUNT(*) FROM %s" % t).fetchone()[0]
+                # Lo borrado sigue guardado, pero no se cuenta: al dueno hay
+                # que decirle cuantos clientes de verdad trae la copia.
+                n = [otro.execute("SELECT COUNT(*) FROM %s WHERE borrado=0" % t).fetchone()[0]
                      for t in ("clientes", "compras", "pagos", "aplicaciones")]
             finally:
                 otro.close()
@@ -712,6 +979,11 @@ def _abrir_solo_lectura(ruta):
         raise sqlite3.OperationalError("no existe")
     uri = pathlib.Path(os.path.abspath(ruta)).as_uri() + "?mode=ro"
     return sqlite3.connect(uri, uri=True)
+
+
+def _creado_iso(creado):
+    """La fecha de creacion de la version 1 ('2026-09-10 12:00:00') en ISO."""
+    return str(creado or "").replace(" ", "T") or ahora_utc()
 
 
 def _con_estado(c):
