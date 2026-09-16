@@ -229,9 +229,11 @@ begin
     return 'listo';
 end $$;
 
-revoke execute on function public.usuarios_del_local()          from anon;
-revoke execute on function public.agregar_al_local(text, text)  from anon;
-revoke execute on function public.quitar_del_local(text)        from anon;
+-- Se le quita el permiso a todo el mundo y despues se le da solo a quien
+-- inicio sesion (revocarle a "anon" no basta: el permiso viene de "public").
+revoke execute on function public.usuarios_del_local()          from public, anon;
+revoke execute on function public.agregar_al_local(text, text)  from public, anon;
+revoke execute on function public.quitar_del_local(text)        from public, anon;
 grant  execute on function public.usuarios_del_local()          to authenticated;
 grant  execute on function public.agregar_al_local(text, text)  to authenticated;
 grant  execute on function public.quitar_del_local(text)        to authenticated;
