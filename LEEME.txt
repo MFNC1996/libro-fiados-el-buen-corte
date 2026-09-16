@@ -79,6 +79,34 @@ CÓMO SE USA
    historia queda archivado (se ve marcando "Mostrar archivados").
 
 
+8. EL CELULAR (novedad de la versión 2)
+   El mismo libro se puede ver y anotar desde el celular, y lo que se hace
+   en un lado aparece en el otro.
+
+   PARA DEJARLO ANDANDO, UNA SOLA VEZ:
+   - En el computador: menú Archivo -> "Cuenta del local", y entra con el
+     correo y la clave del dueño. Queda guardado.
+   - En el celular: abre esta dirección y entra con el mismo correo y clave:
+
+         https://mfnc1996.github.io/libro-fiados-el-buen-corte/
+
+     Adentro hay un botón "Instalar" que deja el acceso directo en la
+     pantalla de inicio, con el logo del local.
+
+   Abajo a la derecha, el programa dice cómo va:
+       "Al día con el celular"     todo sincronizado
+       "Subiendo N cambios..."     está mandando lo último
+       "Sin internet · se anota igual"
+   Si se corta internet, el programa sigue funcionando exactamente igual:
+   lo anotado se guarda y se sube solo cuando vuelve la señal.
+
+9. QUIÉN PUEDE ENTRAR
+   Menú Archivo -> "Quién puede entrar (usuarios)". El dueño puede crear
+   cuentas para otras personas (por ejemplo quien atiende el mostrador):
+   les pone un correo y una clave, y con eso entran desde su celular.
+   También les puede quitar el acceso. Solo el dueño puede hacer esto.
+
+
 ATAJOS DE TECLADO
 -----------------
    Ctrl+N   nuevo cliente              Ctrl+R   abonar
@@ -95,6 +123,10 @@ En tu carpeta de usuario, no dentro del programa:
 Por eso puedes instalar una versión nueva, o desinstalar y volver a
 instalar, sin perder nada. En el menú Archivo, "Abrir la carpeta de datos"
 te lleva ahí.
+
+Con la cuenta conectada, además hay una copia en internet: si el
+computador se echa a perder, al instalar el programa en otro e ingresar
+con la misma cuenta, el libro vuelve completo.
 
 COPIAS DE SEGURIDAD
    El programa guarda solo una copia por día en la carpeta "respaldos"

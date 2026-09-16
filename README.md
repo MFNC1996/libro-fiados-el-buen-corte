@@ -21,6 +21,21 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
 - Las casillas de monto solo aceptan números y van marcando los puntos de los miles al escribir
   (1 → 10 → 100 → 1.000 → 10.000); teléfono solo números, espacios, `+` y guion.
 
+## El celular
+
+El mismo libro, en el celular del dueño: **https://mfnc1996.github.io/libro-fiados-el-buen-corte/**
+Se entra con correo y clave, y desde ahí mismo se instala el acceso directo en la pantalla de inicio.
+
+Lo que se anota en el computador aparece en el celular y al revés, en unos segundos. Sin internet,
+el programa del local sigue anotando y sube lo pendiente cuando vuelve la señal.
+
+| Parte | Dónde |
+|---|---|
+| Base de datos compartida (Supabase) | [nube/esquema.sql](nube/esquema.sql), [nube/LEEME-nube.txt](nube/LEEME-nube.txt) |
+| Sincronización del computador | [sincronizador.py](sincronizador.py) |
+| Página del celular | [web/](web/) |
+| Pruebas de la sincronización | [probar_nube.py](probar_nube.py), [web/probar_cuentas.js](web/probar_cuentas.js) |
+
 ## Cómo está hecho
 
 Python con tkinter (viene con Python, sin dependencias) y SQLite.
