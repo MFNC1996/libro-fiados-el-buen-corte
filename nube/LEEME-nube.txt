@@ -30,9 +30,12 @@ botones en una pagina: no hay que programar nada.
    - Marcar "Auto Confirm User" para que no tenga que confirmar el correo.
 
 5. ENLAZAR EL LOCAL CON ESE USUARIO
-   "SQL Editor" -> "New query". Abre  nube/primer-uso.sql , cámbiale el
-   correo de la primera línea por el del paso 4, pega todo y "Run".
+   "SQL Editor" -> "New query". Abre  nube/primer-uso.sql , busca la línea
+   marcada con flechas (>>>> CAMBIAR ESTE CORREO <<<<) y pon ahí el correo
+   del paso 4. Pega todo y "Run".
    Abajo te va a mostrar una tabla con el "local_id": cópialo.
+   Si el correo está mal escrito, te lo dice con todas sus letras en vez de
+   dejar algo a medio hacer.
 
 6. COPIAR LAS DOS LLAVES
    Menú "Project Settings" (la rueda) -> "API".
