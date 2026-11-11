@@ -2,7 +2,7 @@
 ; Instala la aplicacion, crea accesos directos y deja un desinstalador.
 
 #define Nombre    "Libro de Fiados"
-#define Version   "2.0.0"
+#define Version   "2.1.0"
 #define Empresa   "Macoem"
 #define Ejecutable "LibroDeFiados.exe"
 

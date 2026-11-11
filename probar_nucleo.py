@@ -219,6 +219,21 @@ falla_con("un archivo cualquiera no se restaura", d.restaurar, basura)
 falla_con("un archivo que no existe", N.Datos.revisar_copia, basura + "x")
 check("la base sigue sana", d.deuda(ana), 4000)
 
+print("\n--- la clave de administrador ---")
+# Este valor es el mismo que comprueba la pagina del celular
+# (web/probar_cuentas.js). Si alguno de los dos cambia el calculo, una clave
+# puesta en el computador dejaria de servir en el celular, y al reves.
+check("la huella es la misma que en el celular",
+      N.huella_clave("mi-clave-1234", "00112233445566778899aabbccddeeff", 1000)[0],
+      "ecc0019d3181b6d8b78a608c6c6636bb4126931b9d10929147850569fcd90548")
+h, sal, vueltas = N.huella_clave("abcd")
+check("la clave correcta sirve", N.clave_correcta("abcd", h, sal, vueltas), True)
+check("una parecida no", N.clave_correcta("abcde", h, sal, vueltas), False)
+check("la huella no deja ver la clave", "abcd" in h, False)
+check("cada clave lleva su propia sal", N.huella_clave("abcd")[1] == sal, False)
+check("sin clave puesta no se pide nada", N.clave_correcta("loquesea", "", "", 0), True)
+check("una huella rota no deja pasar", N.clave_correcta("abcd", h, "no-es-sal", 1000), False)
+
 print("\n--- lo que falta subir a internet ---")
 d2 = N.Datos(os.path.join(tempfile.mkdtemp(), "sync.sqlite3"))
 d2.guardar_config("local_id", "local-de-prueba")

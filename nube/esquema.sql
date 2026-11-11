@@ -238,6 +238,44 @@ grant  execute on function public.usuarios_del_local()          to authenticated
 grant  execute on function public.agregar_al_local(text, text)  to authenticated;
 grant  execute on function public.quitar_del_local(text)        to authenticated;
 
+-- ======================================================== clave de administrador
+--  Para que no cualquiera pueda marcar pagado, abonar o borrar, el dueno puede
+--  poner una clave. Se pide en el computador y en el celular.
+--
+--  La clave NO se guarda: se guarda su huella (PBKDF2), que no se puede
+--  devolver a la clave original. Cada dispositivo compara huellas, asi que
+--  tambien funciona sin internet.
+-- ==============================================================================
+
+alter table public.locales add column if not exists clave_huella  text not null default '';
+alter table public.locales add column if not exists clave_sal     text not null default '';
+alter table public.locales add column if not exists clave_vueltas integer not null default 0;
+
+-- Poner, cambiar o sacar la clave. Solo el dueno; la huella la calcula el
+-- programa, aqui solo se guarda.
+create or replace function public.poner_clave_admin(p_huella text, p_sal text,
+                                                    p_vueltas integer)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_local uuid;
+begin
+    select local_id into v_local
+      from public.miembros
+     where user_id = auth.uid() and rol = 'dueno'
+     limit 1;
+    if v_local is null then
+        raise exception 'Solo el dueño puede poner o cambiar la clave.';
+    end if;
+    update public.locales
+       set clave_huella = coalesce(p_huella, ''),
+           clave_sal = coalesce(p_sal, ''),
+           clave_vueltas = coalesce(p_vueltas, 0)
+     where id = v_local;
+    return case when coalesce(p_huella, '') = '' then 'sin clave' else 'listo' end;
+end $$;
+
+revoke execute on function public.poner_clave_admin(text, text, integer) from public, anon;
+grant  execute on function public.poner_clave_admin(text, text, integer) to authenticated;
+
 -- ============================================================================
 --  LISTO. Ahora falta crear el local y decir quien entra: eso va en el
 --  archivo "primer-uso.sql", despues de crear el usuario del dueno.

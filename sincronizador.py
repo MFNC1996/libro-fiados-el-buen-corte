@@ -213,6 +213,11 @@ class Nube(object):
                          {"email": correo, "password": clave}, con_token=False)
         return r or {}
 
+    def datos_del_local(self, local_id):
+        """La fila del local: de ahi sale la clave de administrador."""
+        filas = self._llamar("GET", "/rest/v1/locales?id=eq.%s&select=*" % local_id) or []
+        return filas[0] if filas else {}
+
     def subir(self, tabla, filas):
         """
         Sube filas (las crea o las reemplaza) y devuelve como quedaron, con la
@@ -285,6 +290,7 @@ class Sincronizador(threading.Thread):
 
         subidas = self._subir(datos, nube, local_id)
         bajadas = self._bajar(datos, nube, local_id)
+        self._bajar_la_clave(datos, nube, local_id)
         if bajadas:
             self.version += 1
         self.estado.update(conectado=True, ultima=time.time(),
@@ -310,6 +316,19 @@ class Sincronizador(threading.Thread):
             total += len(filas)
         return total
 
+    def _bajar_la_clave(self, datos, nube, local_id):
+        """Trae la clave de administrador que puso el dueno (su huella)."""
+        try:
+            local = nube.datos_del_local(local_id)
+        except ErrorDeNube:
+            return
+        if not local:
+            return
+        huella = local.get("clave_huella", "")
+        if huella != datos.config("clave_huella"):
+            datos.guardar_huella(huella, local.get("clave_sal", ""),
+                                 local.get("clave_vueltas", 0))
+
     def _bajar(self, datos, nube, local_id):
         total = 0
         for tabla in N.Datos.TABLAS:
@@ -329,6 +348,26 @@ class Sincronizador(threading.Thread):
                 if len(filas) < 500:
                     break
         return total
+
+
+def poner_clave_admin(datos, clave):
+    """
+    Pone (o saca, con clave vacia) la clave de administrador del local.
+
+    Solo el dueno puede: lo comprueba la base de datos, no el programa. La
+    clave no viaja: viaja su huella.
+    """
+    clave = (clave or "").strip()
+    if clave and len(clave) < 4:
+        raise ErrorDeNube("La clave tiene que tener al menos 4 números o letras.")
+    nube = _nube_lista(datos)
+    if clave:
+        huella, sal, vueltas = N.huella_clave(clave)
+    else:
+        huella, sal, vueltas = "", "", 0
+    nube.rpc("poner_clave_admin", {"p_huella": huella, "p_sal": sal, "p_vueltas": vueltas})
+    datos.guardar_huella(huella, sal, vueltas)
+    return True
 
 
 def _con_solape(desde):

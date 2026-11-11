@@ -107,6 +107,30 @@ CÓMO SE USA
    También les puede quitar el acceso. Solo el dueño puede hacer esto.
 
 
+10. CLAVE DE ADMINISTRADOR (novedad de la versión 2.1)
+   Para que no cualquiera pueda cobrar o borrar, el dueño puede poner una
+   clave: menú Archivo -> "Clave de administrador".
+
+   Con la clave puesta, se pide antes de:
+       - marcar una compra como pagada, o quitarle el pago
+       - abonar y "Pagó todo"
+       - corregir o borrar una compra
+       - deshacer un pago
+       - quitar un cliente de la lista
+
+   NO se pide para anotar lo que lleva la gente: eso es lo del día a día y
+   tiene que ser rápido.
+
+   Se escribe una vez y queda suelta por 5 minutos, así se puede cobrar
+   varias cosas seguidas sin repetirla. Es la misma clave en el computador
+   y en el celular. Solo el dueño puede ponerla o cambiarla, y para eso el
+   computador tiene que estar conectado con la cuenta del local.
+
+   La clave no se guarda en ninguna parte, ni en el computador ni en
+   internet: se guarda una huella de ella, de la que no se puede volver a
+   sacar la clave. Si se olvida, el dueño la cambia por otra.
+
+
 ATAJOS DE TECLADO
 -----------------
    Ctrl+N   nuevo cliente              Ctrl+R   abonar

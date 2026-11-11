@@ -116,10 +116,29 @@ console.log("\n--- lo que se escapa para que no rompa la pagina ---");
 check("nombre con comillas y signos", C.escapar('Juan "El <Flaco>" & Co'),
       "Juan &quot;El &lt;Flaco&gt;&quot; &amp; Co");
 
-console.log();
-if (fallas.length) {
-  console.log("FALLARON " + fallas.length + " PRUEBAS:");
-  fallas.forEach((f) => console.log("  - " + f));
+(async function clave() {
+  console.log("\n--- la clave de administrador ---");
+  // El mismo valor que comprueba el computador (probar_nucleo.py): si no
+  // coinciden, la clave puesta en un lado no serviria en el otro.
+  check("la huella es la misma que en el computador",
+        await C.huellaClave("mi-clave-1234", "00112233445566778899aabbccddeeff", 1000),
+        "ecc0019d3181b6d8b78a608c6c6636bb4126931b9d10929147850569fcd90548");
+  const sal = C.salNueva();
+  const h = await C.huellaClave("abcd", sal, 1000);
+  check("la clave correcta sirve", await C.claveCorrecta("abcd", h, sal, 1000), true);
+  check("una parecida no", await C.claveCorrecta("abcde", h, sal, 1000), false);
+  check("sin clave puesta no se pide nada", await C.claveCorrecta("x", "", "", 0), true);
+  check("la sal es distinta cada vez", C.salNueva() === sal, false);
+
+  console.log();
+  if (fallas.length) {
+    console.log("FALLARON " + fallas.length + " PRUEBAS:");
+    fallas.forEach((f) => console.log("  - " + f));
+    process.exit(1);
+  }
+  console.log("Todo bien.");
+})();
+
+if (false) {
   process.exit(1);
 }
-console.log("Todo bien.");

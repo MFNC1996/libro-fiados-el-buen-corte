@@ -136,6 +136,7 @@ label.campo .rotulo{display:block; margin-bottom:3px}
 .ventanita .pie .boton{flex:1}
 .ventanita .previa{margin-top:10px; font-weight:700; color:var(--verde); font-size:14px}
 .ventanita .error{margin-top:10px; color:var(--rojo); font-weight:700; font-size:13.5px}
+.ventanita .ayuda-clave{margin:8px 0 0; color:var(--pista); font-size:12px}
 
 /* --------------------------------------------------------------- entrar */
 .entrar{max-width:420px; margin:0 auto; padding:24px 18px}

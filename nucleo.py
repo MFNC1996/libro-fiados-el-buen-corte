@@ -19,9 +19,12 @@ debe el cliente es la suma de lo que le falta a cada compra.
       el pago de donde salio). "Deshacer pago" borra el pago entero.
 """
 
+import hashlib
+import hmac
 import os
 import pathlib
 import re
+import secrets
 import sqlite3
 import sys
 import uuid
@@ -232,6 +235,32 @@ def ahora_utc():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
+# ------------------------------------------------- clave de administrador
+# La clave nunca se guarda tal cual: se guarda su huella. De la huella no se
+# puede volver a la clave, asi que aunque alguien abra el archivo de datos o
+# la base en internet, no se entera de cual es.
+VUELTAS = 120000          # cuantas vueltas da el calculo; mas = mas dificil de adivinar
+
+
+def huella_clave(clave, sal=None, vueltas=VUELTAS):
+    """Devuelve (huella, sal, vueltas) para guardar o para comparar."""
+    sal = sal or secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", str(clave).encode("utf-8"),
+                            bytes.fromhex(sal), int(vueltas))
+    return h.hex(), sal, int(vueltas)
+
+
+def clave_correcta(clave, huella, sal, vueltas):
+    """True si la clave escrita corresponde a la huella guardada."""
+    if not huella or not sal:
+        return True                      # no hay clave puesta: no se pide nada
+    try:
+        calculada, _, _ = huella_clave(clave, sal, vueltas or VUELTAS)
+    except ValueError:
+        return False
+    return hmac.compare_digest(calculada, huella)
+
+
 def telefono_whatsapp(telefono):
     """
     Numero para abrir WhatsApp, o None. Pensado para Chile:
@@ -433,6 +462,20 @@ class Datos(object):
 
     def _id(self):
         return str(uuid.uuid4())
+
+    # -- clave de administrador -----------------------------------------
+    def hay_clave(self):
+        return bool(self.config("clave_huella"))
+
+    def clave_sirve(self, clave):
+        return clave_correcta(clave, self.config("clave_huella"),
+                              self.config("clave_sal"),
+                              int(self.config("clave_vueltas") or 0))
+
+    def guardar_huella(self, huella, sal, vueltas):
+        self.guardar_config("clave_huella", huella or "")
+        self.guardar_config("clave_sal", sal or "")
+        self.guardar_config("clave_vueltas", vueltas or 0)
 
     def _marcar(self, tabla, *ids):
         """Deja anotado que estas filas hay que subirlas."""

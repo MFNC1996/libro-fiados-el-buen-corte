@@ -359,6 +359,69 @@ check("y si deja quitar al ayudante", quitados == ["mostrador@local.cl"])
 du.destroy()
 v.datos.guardar_config("refresco", "")
 
+print("\n--- la clave de administrador ---")
+check("sin clave puesta, no se pide nada", v.puede("probar") is True)
+huella, sal, vueltas = N.huella_clave("1234")
+v.datos.guardar_huella(huella, sal, vueltas)
+check("ahora el programa sabe que hay clave", v.datos.hay_clave())
+check("la clave correcta sirve", v.datos.clave_sirve("1234"))
+check("otra no", not v.datos.clave_sirve("9999"))
+check("la clave no se guarda tal cual en el archivo",
+      "1234" not in str(dict((f["clave"], f["valor"]) for f in
+                             v.datos.cx.execute("SELECT * FROM ajustes"))))
+
+# Se contesta la ventanita como lo haria una persona.
+def responder(clave):
+    original = app.DialogoClave.mostrar
+    def falsa(self):
+        self.e_clave.poner(clave)
+        self._ok()
+        return self.resultado
+    app.DialogoClave.mostrar = falsa
+    return original
+
+original = responder("mala")
+v._desbloqueado_hasta = 0
+check("con la clave equivocada no deja pasar", v.puede("probar") is False)
+responder("1234")
+check("con la clave correcta deja pasar", v.puede("probar") is True)
+app.DialogoClave.mostrar = original
+check("y queda suelta un rato", v.puede("probar") is True)
+
+print("\n--- con clave puesta, cobrar y borrar la piden ---")
+cid2 = v.datos.agregar_cliente("Cliente de la clave")
+compra = v.datos.anotar(cid2, "Pernil", 7000)
+v.abrir_cliente(cid2)
+al_dia()
+v._desbloqueado_hasta = 0
+preguntadas = []
+app.DialogoClave.mostrar = lambda self: (preguntadas.append(self.cuerpo.winfo_children()[1]
+                                                            .cget("text")), None)[1]
+v.cambiar_pagada(compra)
+check("marcar pagada pide la clave", len(preguntadas) == 1)
+check("y no se marco", v.datos._compra(compra)["estado"] == N.PENDIENTE)
+v.tv_compras.selection_set(compra)
+v.borrar_compra()
+check("borrar tambien la pide", len(preguntadas) == 2)
+check("y no se borro", len(v.datos.compras_de(cid2)) == 1)
+v.recibir_pago()
+check("abonar tambien", len(preguntadas) == 3)
+v.quitar_cliente()
+check("quitar al cliente tambien", len(preguntadas) == 4)
+check("los avisos dicen para que es", all("Para " in t for t in preguntadas))
+
+print("\n--- anotar no pide nada: es lo del dia a dia ---")
+v.e_detalle.poner("Chuleta")
+v.e_monto.poner("5000")
+v.anotar()
+al_dia()
+check("se anoto sin preguntar", v.datos.deuda(cid2) == 7000 + 5000)
+check("y siguen sin pedirse mas claves", len(preguntadas) == 4)
+app.DialogoClave.mostrar = original
+v.datos.guardar_huella("", "", 0)
+v.mostrar_inicio()
+al_dia()
+
 print("\n--- cerrar deja la copia del dia ---")
 v.cerrar()
 copias = os.listdir(os.path.join(N.carpeta_datos(), "respaldos"))

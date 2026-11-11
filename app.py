@@ -38,7 +38,10 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "2.0.0"
+VERSION = "2.1.0"
+# Despues de escribir la clave, no se vuelve a pedir por un rato: cobrar fila
+# por fila con la clave en cada una seria insoportable.
+MINUTOS_SUELTA = 5
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -333,6 +336,7 @@ class App(tk.Tk):
         self._icono()
 
         self.sel = None                 # cliente abierto
+        self._desbloqueado_hasta = 0    # hasta cuando no se vuelve a pedir la clave
         self.orden = "nombre"           # como se ordena la lista de clientes
         self.filtro = "pendientes"      # que compras se ven
         self._pintando = False
@@ -457,6 +461,8 @@ class App(tk.Tk):
                             command=self.cuenta_del_local)
         archivo.add_command(label="Quién puede entrar (usuarios)...",
                             command=self.usuarios_del_local)
+        archivo.add_command(label="Clave de administrador...",
+                            command=self.clave_de_administrador)
         archivo.add_separator()
         archivo.add_command(label="Guardar una copia de seguridad...",
                             command=self.copia_manual)
@@ -1216,7 +1222,7 @@ class App(tk.Tk):
         c = self.datos._compra(compra_id)
         if c["estado"] == N.PAGADA:
             self._volver_pendiente([c])
-        else:
+        elif self.puede("marcar esta compra como pagada"):
             cobrado = self.datos.marcar_pagada(compra_id)
             self.recargar_todo()
             self.avisar("Pagada: %s  (%s recibidos)" % (c["detalle"] or "compra",
@@ -1224,6 +1230,8 @@ class App(tk.Tk):
 
     def marcar_pagadas(self):
         ids = self._compras_elegidas()
+        if ids and not self.puede("marcar compras como pagadas"):
+            return
         total, n = 0, 0
         for i in ids:
             cobrado = self.datos.marcar_pagada(i)
@@ -1243,6 +1251,8 @@ class App(tk.Tk):
             self._volver_pendiente(compras)
 
     def _volver_pendiente(self, compras):
+        if not self.puede("quitarle el pago a una compra"):
+            return
         total = sum(c["abonado"] for c in compras)
         if len(compras) == 1:
             c = compras[0]
@@ -1267,6 +1277,8 @@ class App(tk.Tk):
             if len(ids) != 1:
                 return
             compra_id = ids[0]
+        if not self.puede("corregir una compra ya anotada"):
+            return
         if DialogoCompra(self, self.datos._compra(compra_id)).mostrar():
             self.recargar_todo()
             self.avisar("Compra corregida.")
@@ -1274,6 +1286,8 @@ class App(tk.Tk):
     def borrar_compra(self):
         compras = [self.datos._compra(i) for i in self._compras_elegidas()]
         if not compras:
+            return
+        if not self.puede("borrar una compra"):
             return
         con_abono = [c for c in compras if c["abonado"] > 0]
         if con_abono:
@@ -1301,6 +1315,8 @@ class App(tk.Tk):
     def recibir_pago(self):
         if self.sel is None or self._cl["deuda"] <= 0 or self.grab_current() is not None:
             return
+        if not self.puede("registrar un abono"):
+            return
         r = DialogoPago(self, self._cl, self.datos).mostrar()
         if r:
             self.nb.select(self.tab_compras)
@@ -1310,6 +1326,8 @@ class App(tk.Tk):
 
     def pago_todo(self):
         if self.sel is None or self._cl["deuda"] <= 0 or self.grab_current() is not None:
+            return
+        if not self.puede("dejar la cuenta al día"):
             return
         cl = self._cl
         if not messagebox.askyesno(
@@ -1324,6 +1342,8 @@ class App(tk.Tk):
     def deshacer_pago(self):
         sel = [i for i in self.tv_pagos.selection() if i != "vacio"]
         if not sel:
+            return
+        if not self.puede("deshacer un pago"):
             return
         valores = self.tv_pagos.item(sel[0], "values")
         if not messagebox.askyesno(
@@ -1356,6 +1376,8 @@ class App(tk.Tk):
 
     def quitar_cliente(self):
         cl = self._cl
+        if not self.puede("quitar un cliente de la lista"):
+            return
         if cl["deuda"] > 0:
             return messagebox.showinfo(
                 "Todavía debe", "%s todavía debe %s.\n\nNo se puede quitar a alguien que "
@@ -1507,6 +1529,43 @@ class App(tk.Tk):
         if DialogoCuenta(self, self.datos).mostrar():
             self.sinc.apurar()
             self.avisar("Conectado. Lo anotado ahora se comparte con el celular.")
+
+    # ------------------------------------------- clave de administrador
+    def puede(self, accion):
+        """
+        Pide la clave antes de cobrar o de borrar, si el dueno puso una.
+
+        Una vez escrita queda suelta unos minutos, para no tener que repetirla
+        en cada fila mientras se esta cobrando.
+        """
+        if not self.datos.hay_clave():
+            return True
+        if time.time() < self._desbloqueado_hasta:
+            self._desbloqueado_hasta = time.time() + MINUTOS_SUELTA * 60
+            return True
+        if self.grab_current() is not None:
+            return False
+        if DialogoClave(self, self.datos, accion).mostrar():
+            self._desbloqueado_hasta = time.time() + MINUTOS_SUELTA * 60
+            return True
+        return False
+
+    def clave_de_administrador(self):
+        if self.grab_current() is not None:
+            return
+        if not sincronizador.hay_sesion(self.datos):
+            return messagebox.showinfo(
+                "Primero hay que conectarse",
+                "La clave es la misma en el computador y en el celular, así que se "
+                "guarda en la cuenta del local.\n\nMenú Archivo → «Cuenta del local».")
+        if self.datos.hay_clave() and not self.puede("cambiar la clave"):
+            return
+        r = DialogoPonerClave(self, self.datos).mostrar()
+        if r == "puesta":
+            self._desbloqueado_hasta = time.time() + MINUTOS_SUELTA * 60
+            self.avisar("Clave puesta. Ahora se pide para cobrar, borrar o quitar.")
+        elif r == "sacada":
+            self.avisar("Se sacó la clave: ya no se pide para nada.", AMBAR)
 
     def usuarios_del_local(self):
         if self.grab_current() is not None:
@@ -1776,6 +1835,69 @@ class DialogoCuenta(Dialogo):
         except sincronizador.ErrorDeNube as e:
             raise ValueError(str(e))
         return True
+
+
+class DialogoClave(Dialogo):
+    """Pide la clave de administrador antes de cobrar o de borrar."""
+
+    def __init__(self, padre, datos, accion):
+        Dialogo.__init__(self, padre, "Clave de administrador", "Continuar", "rojo")
+        self.datos = datos
+        tk.Label(self.cuerpo, text="Se necesita la clave", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(self.cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 wraplength=px(380),
+                 text="Para %s hay que escribir la clave del local." % accion).grid(
+            row=1, column=0, sticky="w", pady=(2, 0))
+        self.e_clave = self.campo(1, "CLAVE", "")
+        self.e_clave.config(show="•")
+        tk.Label(self.cuerpo, bg=BLANCO, fg=PISTA, font=(FUENTE, 8),
+                 text="Se pide una vez; después queda suelta por %d minutos."
+                      % MINUTOS_SUELTA).grid(row=4, column=0, sticky="w", pady=(6, 0))
+
+    def aceptar(self):
+        if not self.datos.clave_sirve(self.e_clave.valor()):
+            raise ValueError("Esa no es la clave.")
+        return True
+
+
+class DialogoPonerClave(Dialogo):
+    """Pone, cambia o saca la clave de administrador. Solo el dueno puede."""
+
+    def __init__(self, padre, datos):
+        hay = datos.hay_clave()
+        Dialogo.__init__(self, padre, "Clave de administrador",
+                         "Cambiar la clave" if hay else "Poner la clave")
+        self.datos = datos
+        tk.Label(self.cuerpo, text="Clave de administrador", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).grid(row=0, column=0, sticky="w")
+        tk.Label(self.cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 wraplength=px(390),
+                 text="Con una clave puesta, el programa la pide antes de marcar "
+                      "pagado, abonar, corregir, borrar o quitar un cliente. Anotar "
+                      "lo que lleva la gente sigue sin pedir nada.\n\n"
+                      "Es la misma clave en el computador y en el celular.").grid(
+            row=1, column=0, sticky="w", pady=(2, 0))
+        self.e_nueva = self.campo(1, "CLAVE NUEVA", "Al menos 4 números o letras")
+        self.e_nueva.config(show="•")
+        self.e_otra = self.campo(2, "ESCRÍBELA DE NUEVO", "")
+        self.e_otra.config(show="•")
+        if hay:
+            tk.Label(self.cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 9),
+                     text="Para sacar la clave, deja las dos casillas vacías.").grid(
+                row=6, column=0, sticky="w", pady=(8, 0))
+
+    def aceptar(self):
+        nueva, otra = self.e_nueva.valor(), self.e_otra.valor()
+        if nueva != otra:
+            raise ValueError("Las dos claves no son iguales.")
+        if not nueva and not self.datos.hay_clave():
+            raise ValueError("Escribe la clave que quieres poner.")
+        try:
+            sincronizador.poner_clave_admin(self.datos, nueva)
+        except sincronizador.ErrorDeNube as e:
+            raise ValueError(str(e))
+        return "puesta" if nueva else "sacada"
 
 
 class DialogoUsuarios(tk.Toplevel):

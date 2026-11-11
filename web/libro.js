@@ -24,6 +24,9 @@ let pestana = "compras";
 let ocupado = false;                      // hay una ventanita abierta
 let firma = "";                           // para no redibujar si nada cambio
 let instalador = null;                    // el aviso del celular para instalarla
+let clave = { huella: "", sal: "", vueltas: 0 };   // la clave que puso el dueno
+let sueltaHasta = 0;                      // hasta cuando no se vuelve a pedir
+const MINUTOS_SUELTA = 5;
 
 /* Las cuentas viven en cuentas.js, probadas aparte con node. */
 const C = window.Cuentas;
@@ -57,6 +60,84 @@ async function cargar() {
     ["clientes", "compras", "pagos", "aplicaciones"].map(traerTodo));
   D = { clientes, compras, pagos, aplicaciones };
   recalcular();
+  const { data } = await sb.from("locales")
+    .select("clave_huella,clave_sal,clave_vueltas").eq("id", LOCAL_ID).maybeSingle();
+  if (data) {
+    clave = { huella: data.clave_huella || "", sal: data.clave_sal || "",
+              vueltas: data.clave_vueltas || 0 };
+  }
+}
+
+/* ------------------------------------------- clave de administrador -------
+ * Cobrar, corregir o borrar pide la clave, si el dueno puso una. Anotar lo
+ * que lleva la gente no pide nada: es lo del dia a dia.
+ */
+function puede(accion) {
+  if (!clave.huella) return Promise.resolve(true);
+  if (Date.now() < sueltaHasta) {
+    sueltaHasta = Date.now() + MINUTOS_SUELTA * 60000;
+    return Promise.resolve(true);
+  }
+  return new Promise((resolver) => {
+    ocupado = true;
+    $("ventanita").innerHTML =
+      '<div class="fondo"><div class="ventanita"><h2>Clave de administrador</h2>' +
+      '<p class="sub">Para ' + escapar(accion) + ' hay que escribir la clave del local.</p>' +
+      '<label class="campo"><span class="rotulo">Clave</span>' +
+      '<input type="password" id="v-clave" autocomplete="current-password"></label>' +
+      '<p class="error oculto" id="v-error"></p>' +
+      '<p class="ayuda-clave">Se pide una vez; después queda suelta por ' +
+      MINUTOS_SUELTA + ' minutos.</p>' +
+      '<div class="pie"><button class="boton" id="v-cancelar">Cancelar</button>' +
+      '<button class="boton rojo" id="v-ok">Continuar</button></div></div></div>';
+    const cerrar = (r) => { ocupado = false; $("ventanita").innerHTML = ""; resolver(r); };
+    $("v-cancelar").onclick = () => cerrar(false);
+    $("v-ok").onclick = async () => {
+      $("v-ok").disabled = true;
+      const sirve = await C.claveCorrecta($("v-clave").value, clave.huella, clave.sal,
+                                          clave.vueltas);
+      if (sirve) {
+        sueltaHasta = Date.now() + MINUTOS_SUELTA * 60000;
+        return cerrar(true);
+      }
+      $("v-error").textContent = "Esa no es la clave.";
+      $("v-error").classList.remove("oculto");
+      $("v-ok").disabled = false;
+      $("v-clave").select();
+    };
+    $("v-clave").focus();
+    document.getElementById("v-clave").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") $("v-ok").click();
+    });
+  });
+}
+
+/* El dueno puede poner, cambiar o sacar la clave desde el celular. */
+function ponerClave() {
+  const hay = !!clave.huella;
+  ventanita("Clave de administrador",
+    "Con una clave puesta, se pide antes de marcar pagado, abonar, corregir, " +
+    "borrar o quitar un cliente. Anotar no pide nada. Es la misma clave que en " +
+    "el computador.",
+    campo("v-nueva", "Clave nueva", "", 'type="password" placeholder="Al menos 4"') +
+    campo("v-otra", "Escríbela de nuevo", "", 'type="password"') +
+    (hay ? "<p class=\"ayuda-clave\">Para sacar la clave, deja las dos vacías.</p>" : ""),
+    async () => {
+      const nueva = $("v-nueva").value.trim(), otra = $("v-otra").value.trim();
+      if (nueva !== otra) throw new Error("Las dos claves no son iguales.");
+      if (!nueva && !hay) throw new Error("Escribe la clave que quieres poner.");
+      if (nueva && nueva.length < 4) {
+        throw new Error("La clave tiene que tener al menos 4 números o letras.");
+      }
+      const sal = nueva ? C.salNueva() : "";
+      const huella = nueva ? await C.huellaClave(nueva, sal, C.VUELTAS) : "";
+      const { error } = await sb.rpc("poner_clave_admin",
+        { p_huella: huella, p_sal: sal, p_vueltas: nueva ? C.VUELTAS : 0 });
+      if (error) throw new Error(error.message);
+      clave = { huella: huella, sal: sal, vueltas: nueva ? C.VUELTAS : 0 };
+      sueltaHasta = nueva ? Date.now() + MINUTOS_SUELTA * 60000 : 0;
+      mostrarAviso(nueva ? "Clave puesta." : "Se sacó la clave: ya no se pide para nada.");
+    }, hay ? "Cambiar la clave" : "Poner la clave");
 }
 
 const recalcular = () => C.recalcular(D);
@@ -309,8 +390,9 @@ function ventanita(titulo, subtitulo, cuerpo, alAceptar, textoOk, estiloOk) {
 }
 
 function campo(id, rotulo, valor, extra) {
+  const tipo = (extra || "").includes("type=") ? "" : 'type="text" ';
   return '<label class="campo"><span class="rotulo">' + rotulo + "</span>" +
-         '<input type="text" id="' + id + '" value="' + escapar(valor || "") + '" ' +
+         "<input " + tipo + 'id="' + id + '" value="' + escapar(valor || "") + '" ' +
          (extra || "") + "></label>";
 }
 
@@ -346,7 +428,8 @@ function editarCliente(cl) {
     });
 }
 
-function quitarCliente(cl) {
+async function quitarCliente(cl) {
+  if (!(await puede("quitar un cliente de la lista"))) return;
   if (cl.deuda > 0) {
     return mostrarAviso(cl.nombre + " todavía debe " + pesos(cl.deuda) +
                         ": no se puede quitar.", true);
@@ -363,7 +446,8 @@ function quitarCliente(cl) {
     }, "Quitar");
 }
 
-function abonar(cl) {
+async function abonar(cl) {
+  if (!(await puede("registrar un abono"))) return;
   ventanita("Abonar", "Debe <b>" + pesos(cl.deuda) + "</b>",
     campo("v-monto", "¿Cuánto abona?", "", 'inputmode="numeric" placeholder="$"') +
     '<p class="previa" id="v-previa"></p>',
@@ -389,7 +473,8 @@ function abonar(cl) {
   $("v-monto").addEventListener("input", previa);
 }
 
-function pagoTodo(cl) {
+async function pagoTodo(cl) {
+  if (!(await puede("dejar la cuenta al día"))) return;
   ventanita("Pagó todo", "¿" + escapar(cl.nombre) + " pagó todo lo que debe?",
     "<p>Se anota un pago de <b>" + pesos(cl.deuda) + "</b> con fecha de hoy y todas sus " +
     "compras quedan pagadas.</p>",
@@ -399,7 +484,8 @@ function pagoTodo(cl) {
     }, "Sí, pagó todo", "verde");
 }
 
-function tocarCompra(c) {
+async function tocarCompra(c) {
+  if (!(await puede("corregir o borrar una compra"))) return;
   const pagada = c.estado === "pagada";
   ventanita(c.detalle || "Compra",
     fechaCorta(c.fecha) + " · " + pesos(c.monto) +
@@ -436,7 +522,8 @@ function tocarCompra(c) {
   if (pagada) $("v-ok").textContent = "Guardar";
 }
 
-function tocarPago(p) {
+async function tocarPago(p) {
+  if (!(await puede("deshacer un pago"))) return;
   ventanita("Deshacer", "Entregó " + pesos(p.monto) + " el " + fechaCorta(p.fecha),
     "<p>Las compras que cubría vuelven a quedar pendientes.</p>",
     async () => {
@@ -446,6 +533,8 @@ function tocarPago(p) {
 }
 
 async function cambiarCheck(c) {
+  if (!(await puede(c.estado === "pagada" ? "quitarle el pago a una compra"
+                                          : "marcar esta compra como pagada"))) return;
   if (c.estado === "pagada") {
     return ventanita("Volver a pendiente",
       escapar(c.detalle || "Compra") + " figura con " + pesos(c.abonado) + " pagados.",
@@ -657,6 +746,7 @@ function conectarBotones() {
     });
   });
   $("logo-cabecera").addEventListener("click", volverALaLista);
+  $("clave-admin").addEventListener("click", (e) => { e.preventDefault(); ponerClave(); });
 }
 
 function mandarWhatsapp(cl) {

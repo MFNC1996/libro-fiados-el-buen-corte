@@ -220,6 +220,40 @@
       }).join("\n") + "\n\nTotal pendiente: " + pesos(total) + "\n\n¡Gracias!";
   }
 
+  /*
+   * La huella de la clave de administrador. Es el mismo calculo que hace el
+   * computador (PBKDF2, SHA-256, 32 bytes), para que la misma clave sirva en
+   * los dos lados. La clave nunca se guarda ni se manda: solo su huella.
+   */
+  async function huellaClave(clave, salHex, vueltas) {
+    var sal = new Uint8Array(String(salHex).match(/../g).map(function (h) {
+      return parseInt(h, 16);
+    }));
+    var llave = await crypto.subtle.importKey(
+      "raw", new TextEncoder().encode(String(clave)), "PBKDF2", false, ["deriveBits"]);
+    var bits = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt: sal, iterations: Number(vueltas), hash: "SHA-256" },
+      llave, 256);
+    return Array.from(new Uint8Array(bits)).map(function (b) {
+      return b.toString(16).padStart(2, "0");
+    }).join("");
+  }
+
+  async function claveCorrecta(clave, huella, sal, vueltas) {
+    if (!huella || !sal) return true;          // no hay clave puesta
+    try {
+      return (await huellaClave(clave, sal, vueltas)) === huella;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function salNueva() {
+    var b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    return Array.from(b).map(function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+  }
+
   var Cuentas = {
     DIAS: DIAS, MESES: MESES,
     PENDIENTE: PENDIENTE, PARCIAL: PARCIAL, PAGADA: PAGADA,
@@ -227,7 +261,8 @@
     leerFecha: leerFecha, fechaCorta: fechaCorta, fechaTxt: fechaTxt,
     haceCuanto: haceCuanto, diaYFecha: diaYFecha, telefonoWhatsapp: telefonoWhatsapp,
     escapar: escapar, recalcular: recalcular, repartir: repartir,
-    textoWhatsapp: textoWhatsapp
+    textoWhatsapp: textoWhatsapp, huellaClave: huellaClave,
+    claveCorrecta: claveCorrecta, salNueva: salNueva, VUELTAS: 120000
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = Cuentas;

@@ -153,13 +153,26 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.0
-          name: Libro de Fiados 2.0
+          tag_name: v2.1.0
+          name: Libro de Fiados 2.1
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
             Una hoja por cliente: lo que se anoto, cuanto vale, lo que ya pago
             y lo que queda pendiente.
+
+            ### Novedad de la 2.1: clave de administrador
+
+            El dueno puede poner una clave (menu Archivo -> "Clave de
+            administrador"). Con ella puesta, se pide antes de marcar pagado,
+            abonar, dejar la cuenta al dia, corregir, borrar una compra,
+            deshacer un pago o quitar un cliente. Anotar lo que lleva la gente
+            no pide nada: es lo del dia a dia.
+
+            Es la misma clave en el computador y en el celular. Se escribe una
+            vez y queda suelta cinco minutos, para poder cobrar varias cosas
+            seguidas. La clave no se guarda en ninguna parte: se guarda una
+            huella de la que no se puede volver atras.
 
             ### Novedades de la 1.2
 
