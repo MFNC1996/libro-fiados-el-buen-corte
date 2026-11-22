@@ -74,6 +74,37 @@ def icono_chico(tam):
     return base.resize((tam, tam), Image.LANCZOS)
 
 
+def cuadros_de_moneda(logo, lado=190, pasos=12):
+    """
+    Los cuadros del logo girando como una moneda, para la pantalla de carga.
+
+    En la pagina web esto lo hace el navegador con rotateY; aqui hay que
+    dibujarlo, porque la ventana del programa no sabe de 3D: cada cuadro es el
+    logo angostado segun el angulo, como se ve una moneda al girar. Las dos
+    caras son iguales, asi que nunca se lee nada al reves.
+
+    No se incluyen los extremos (la moneda de frente): esa imagen ya existe
+    aparte, y repetirla aqui engordaria el programa para nada. Los cuadros van
+    con menos colores, que a este tamano no se nota y pesa la mitad.
+    """
+    import math
+    base = logo.resize((lado, lado), Image.LANCZOS)
+    cuadros = []
+    for i in range(1, pasos):                            # sin 0 ni media vuelta
+        ancho = max(2, int(round(lado * abs(math.cos(math.pi * i / pasos)))))
+        lienzo = Image.new("RGBA", (lado, lado), (0, 0, 0, 0))
+        if ancho <= 3:
+            # De canto: la moneda se ve como una linea. Se dibuja el borde
+            # verde del logo, para que no desaparezca del todo.
+            borde = Image.new("RGBA", (3, lado), VERDE)
+            lienzo.paste(borde, ((lado - 3) // 2, 0))
+        else:
+            angosto = base.resize((ancho, lado), Image.LANCZOS)
+            lienzo.paste(angosto, ((lado - ancho) // 2, 0), angosto)
+        cuadros.append(lienzo.quantize(colors=64, method=Image.FASTOCTREE))
+    return cuadros
+
+
 def en_png(imagen):
     b = io.BytesIO()
     imagen.save(b, "PNG", optimize=True)
@@ -105,6 +136,8 @@ def main():
         "VENTANA": en_png(icono_chico(32)),
         "IMPRESO": en_png(logo.resize((220, 220), Image.LANCZOS)),
     }
+    moneda = [en_png(c) for c in cuadros_de_moneda(logo)]
+    moneda_chica = [en_png(c) for c in cuadros_de_moneda(logo, lado=58)]
     destino = os.path.join(RAIZ, "imagen_marca.py")
     with open(destino, "w") as f:
         f.write("# -*- coding: utf-8 -*-\n")
@@ -112,6 +145,12 @@ def main():
                 'empaquetado/hacer_icono.py; no editar a mano."""\n')
         for nombre, datos in piezas.items():
             f.write('\n%s = """%s"""\n' % (nombre, base64.b64encode(datos).decode()))
+        f.write("\n# El logo girando como una moneda, cuadro por cuadro.\n")
+        for nombre, cuadros in (("MONEDA", moneda), ("MONEDA_CHICA", moneda_chica)):
+            f.write("\n%s = [\n" % nombre)
+            for c in cuadros:
+                f.write('    """%s""",\n' % base64.b64encode(c).decode())
+            f.write("]\n")
     print("imagen_marca.py: %d KB" % (os.path.getsize(destino) // 1024))
 
 

@@ -41,6 +41,13 @@ app.messagebox.showinfo = lambda *a, **k: preguntas.append(a[0])
 app.messagebox.showwarning = lambda *a, **k: preguntas.append(a[0])
 app.webbrowser.open = lambda *a, **k: preguntas.append("navegador")
 app.App._abrir = staticmethod(lambda ruta: preguntas.append("abrir " + ruta))
+# Las pruebas no salen a internet: la revision de version se contesta aqui.
+app.actualizador.hay_nueva = lambda version: (False, {"version": version})
+# El aviso de novedades se prueba aparte, a proposito: si saltara solo en
+# medio de las demas pruebas, dejaria la ventana esperando que alguien lo
+# cierre y no terminaria nunca.
+mostrar_novedades = app.App.mostrar_novedades
+app.App.mostrar_novedades = lambda self: None
 
 fallas = []
 def check(nombre, cond):
@@ -394,6 +401,46 @@ al_dia()
 check("y el resumen vuelve a quedar sin pendientes",
       "(" not in v.btn_cobranzas.cget("text"))
 
+print("\n--- las novedades al actualizar ---")
+check("un computador recien instalado no tiene nada que contar al principio",
+      v.datos.config("novedad_vista") in ("", app.VERSION))
+v.datos.guardar_config("novedad_vista", "1.2.1")      # como el local que viene de la 1.2
+pendientes = v.novedades_pendientes()
+check("desde la 1.2.1 hay varias novedades que contar", len(pendientes) >= 3)
+check("y la primera es la del celular",
+      any("celular" in p for _, puntos in pendientes for p in puntos))
+check("se cuenta lo de la clave",
+      any("CLAVE DE ADMINISTRADOR" in p for _, puntos in pendientes for p in puntos))
+check("y lo de la cobranza",
+      any("cobrarle" in p for _, puntos in pendientes for p in puntos))
+nov = app.DialogoNovedades(v, pendientes)
+check("como no hay clave puesta, invita a ponerla", nov.sin_clave is True)
+nov.destroy()
+v.datos.guardar_huella(*N.huella_clave("1234"))
+nov = app.DialogoNovedades(v, pendientes)
+check("si ya tiene clave, no insiste", nov.sin_clave is False)
+nov.destroy()
+v.datos.guardar_huella("", "", 0)
+app.DialogoNovedades.mostrar = lambda self: self.destroy()   # se cierra sola
+mostrar_novedades(v)
+check("despues de verlas queda anotado", v.datos.config("novedad_vista") == app.VERSION)
+check("y no se vuelven a mostrar", v.novedades_pendientes() == [])
+
+print("\n--- el logo que gira como moneda ---")
+check("la cabecera tiene los cuadros", len(v.cuadros_marca) > 5)
+antes = v.logo_cabecera.cget("image")
+v._vuelta_marca = 0
+v._girar_marca()
+al_dia()
+check("al girar cambia la imagen", v.logo_cabecera.cget("image") != antes)
+for _ in range(len(v.cuadros_marca) + 5):     # hasta terminar la vuelta
+    if v._vuelta_marca < 0:
+        break
+    v._girar_marca()
+v._girar_marca()                              # y queda de frente de nuevo
+al_dia()
+check("y vuelve a quedar de frente", v.logo_cabecera.cget("image") == antes)
+
 print("\n--- el aviso de version nueva ---")
 check("al principio no hay aviso", v.lbl_version.cget("text") == "")
 v._hay_version_nueva({"version": "9.9.9", "notas": "Arregla algo",
@@ -485,6 +532,10 @@ check("con el nombre del local", any(
     getattr(w, "cget", None) and "Carnicería El Buen Corte" in str(w.cget("text"))
     for w in v._splash.winfo_children()[0].winfo_children() if isinstance(w, app.tk.Label)))
 check("dice lo que esta cargando", "Cargando" in v._splash.lbl.cget("text"))
+check("el logo tiene los cuadros de la moneda", len(v._splash.cuadros) > 5)
+v._splash._vuelta = 0
+v._splash._girar()
+check("y gira sin caerse", v._splash.winfo_exists())
 
 def despues_de_cargar():
     visto["estado"] = v.state()

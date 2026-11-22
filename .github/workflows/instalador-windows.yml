@@ -201,13 +201,23 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.2.0
-          name: Libro de Fiados 2.2
+          tag_name: v2.3.0
+          name: Libro de Fiados 2.3
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
             Una hoja por cliente: lo que se anoto, cuanto vale, lo que ya pago
             y lo que queda pendiente.
+
+            ### Novedades de la 2.3
+
+            - Al actualizar, el programa cuenta que trae la version nueva, y si
+              todavia no hay clave de administrador, invita a ponerla ahi mismo.
+              Se puede cambiar cuando se quiera en Archivo -> "Clave de
+              administrador".
+            - El logo gira como una moneda, igual que en la cartelera y el
+              mantenedor de balanzas: en la pantalla de carga y, de vez en
+              cuando, en la cabecera. En el celular tambien.
 
             ### Novedades de la 2.2
 

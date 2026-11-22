@@ -161,6 +161,10 @@ CÓMO SE USA
 
    También se puede buscar a mano: menú Ayuda -> "Buscar actualización".
 
+   Después de actualizar, el programa cuenta en una ventanita lo que trae la
+   versión nueva. Si todavía no hay clave de administrador, ahí mismo ofrece
+   ponerla. Esa ventanita aparece una sola vez por versión.
+
 
 ATAJOS DE TECLADO
 -----------------

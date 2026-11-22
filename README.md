@@ -24,7 +24,9 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
 - **Clave de administrador** (opcional): si el dueño la pone, se pide antes de cobrar, corregir,
   borrar o quitar; anotar nunca la pide. La misma clave en el computador y en el celular, guardada
   como huella PBKDF2 (nunca en claro) y verificada sin internet.
-- Pantalla de carga con el logo al abrir, y una sola ventana abierta a la vez.
+- Pantalla de carga con el logo girando como moneda (igual que la cartelera y las balanzas),
+  y una sola ventana abierta a la vez.
+- Al actualizar, cuenta las novedades e invita a poner la clave si todavía no hay.
 - Las casillas de monto solo aceptan números y van marcando los puntos de los miles al escribir
   (1 → 10 → 100 → 1.000 → 10.000); teléfono solo números, espacios, `+` y guion.
 

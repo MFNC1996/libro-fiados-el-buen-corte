@@ -11,13 +11,16 @@
 <link rel="icon" href="icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Libro de Fiados">
-<link rel="stylesheet" href="estilo.css?v=5">
+<link rel="stylesheet" href="estilo.css?v=6">
 </head>
 <body>
 
 <!-- ============================ entrar ============================ -->
 <section id="entrar" class="entrar">
-  <img src="logo.png" alt="Carnicería El Buen Corte">
+  <div class="logo-moneda grande">
+    <img class="cara" src="logo.png" alt="Carnicería El Buen Corte">
+    <img class="sello" src="logo.png" alt="">
+  </div>
   <h1>El Buen Corte</h1>
   <p class="sub">LONCOCHE · LIBRO DE FIADOS</p>
   <form id="forma-entrar">
@@ -39,7 +42,10 @@
 <!-- ============================ el libro ============================ -->
 <section id="app" class="oculto">
   <header>
-    <img src="logo.png" alt="" id="logo-cabecera">
+    <div class="logo-moneda" id="logo-cabecera">
+      <img class="cara" src="logo.png" alt="">
+      <img class="sello" src="logo.png" alt="">
+    </div>
     <div class="nombre"><b>El Buen Corte</b><span>LONCOCHE · LIBRO DE FIADOS</span></div>
     <div class="total"><span>POR COBRAR</span><b id="por-cobrar">$0</b></div>
   </header>
@@ -149,7 +155,7 @@
 <div id="ventanita"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="cuentas.js?v=5"></script>
-<script src="libro.js?v=5"></script>
+<script src="cuentas.js?v=6"></script>
+<script src="libro.js?v=6"></script>
 </body>
 </html>

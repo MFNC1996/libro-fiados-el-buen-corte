@@ -31,6 +31,7 @@ ROJO = "#C8202D"          # las letras
 ROJO_OSCURO = "#A60D2B"   # las cintas
 VERDE = "#1F7A3D"         # el anillo
 VERDE_OSCURO = "#165E2E"
+VERDE_CLARO = "#E3F1E7"
 AMBAR = "#8A5A00"
 AMBAR_CLARO = "#FBF0DC"
 TINTA = "#1B1715"
@@ -40,7 +41,25 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
+
+# Lo que trae cada versión, contado para el dueño del local. Al actualizar se
+# muestra lo que salió desde la versión que tenía, no la lista entera.
+NOVEDADES = [
+    ("2.0.0", ["El mismo libro se ve y se anota desde el celular.",
+               "Lo que se anota en un lado aparece en el otro en unos segundos.",
+               "Sin internet el programa sigue igual: sube lo pendiente después."]),
+    ("2.1.0", ["Se puede poner una CLAVE DE ADMINISTRADOR: con ella puesta, se pide "
+               "antes de marcar pagado, abonar, corregir, borrar o quitar un cliente.",
+               "Anotar lo que lleva la gente nunca pide clave."]),
+    ("2.2.0", ["El programa avisa a quién hay que cobrarle: primer recordatorio a los "
+               "30 días y el segundo 10 días después, con el mensaje de WhatsApp listo.",
+               "Cada cliente tiene un interruptor «no mandarle recordatorios».",
+               "Se actualiza solo: avisa cuando hay versión nueva y se instala con un "
+               "clic."]),
+    ("2.3.0", ["El logo gira como una moneda al abrir, igual que en los demás "
+               "programas del local."]),
+]
 # Despues de escribir la clave, no se vuelve a pedir por un rato: cobrar fila
 # por fila con la clave en cada una seria insoportable.
 MINUTOS_SUELTA = 5
@@ -256,11 +275,19 @@ class Presentacion(tk.Toplevel):
         marco.pack(fill="both", expand=True)
         tk.Frame(marco, bg=VERDE, height=6).pack(fill="x")
         tk.Frame(marco, bg=ROJO_OSCURO, height=2).pack(fill="x")
+        # El logo dando vuelta como una moneda, igual que en los demás
+        # programas del local. Los cuadros vienen dibujados de antes: la
+        # ventana no sabe de 3D, así que se cambia la imagen y listo.
         self.img = None
+        self.cuadros = []
+        self.lbl_logo = None
         try:
             import imagen_marca
             self.img = tk.PhotoImage(data=imagen_marca.INICIO)
-            tk.Label(marco, image=self.img, bg=BLANCO).pack(pady=(24, 10))
+            self.cuadros = [tk.PhotoImage(data=c)
+                            for c in getattr(imagen_marca, "MONEDA", [])]
+            self.lbl_logo = tk.Label(marco, image=self.img, bg=BLANCO)
+            self.lbl_logo.pack(pady=(24, 10))
         except Exception:
             tk.Frame(marco, bg=BLANCO, height=24).pack()
         tk.Label(marco, text="Carnicería El Buen Corte", bg=BLANCO, fg=ROJO,
@@ -283,6 +310,32 @@ class Presentacion(tk.Toplevel):
                                        (self.winfo_screenwidth() - ancho) // 2,
                                        (self.winfo_screenheight() - alto) // 2))
         self.update()
+        self._vuelta = -1
+        if self.cuadros:
+            self.after(700, self._girar)
+
+    def _girar(self):
+        """
+        Una vuelta de moneda: de frente un rato, media vuelta rápida, y de
+        nuevo de frente. Como la moneda no tiene revés (las dos caras son el
+        mismo logo), nunca se lee nada al revés.
+        """
+        if not self.winfo_exists() or not self.lbl_logo:
+            return
+        try:
+            if self._vuelta < 0:
+                self.lbl_logo.config(image=self.img)
+                self._vuelta = 0
+                self.after(1400, self._girar)
+            elif self._vuelta < len(self.cuadros):
+                self.lbl_logo.config(image=self.cuadros[self._vuelta])
+                self._vuelta += 1
+                self.after(45, self._girar)
+            else:
+                self._vuelta = -1
+                self.after(10, self._girar)
+        except tk.TclError:
+            pass                      # la pantalla de carga ya se cerró
 
     def paso(self, texto, porcentaje):
         self.lbl.config(text=texto)
@@ -373,6 +426,7 @@ class App(tk.Tk):
             self._terminar_presentacion(inicio)
         else:
             self.after(200, lambda: self.e_buscar.focus_set())
+        self.after(1500, self.mostrar_novedades)
 
     # ------------------------------------------------------- pantalla de carga
     def _paso(self, texto, porcentaje):
@@ -510,14 +564,21 @@ class App(tk.Tk):
 
         # El logo del local.
         self.img_marca = None
+        self.cuadros_marca = []
         try:
             import imagen_marca
             self.img_marca = tk.PhotoImage(data=imagen_marca.CABECERA)
-            logo = tk.Label(barra, image=self.img_marca, bg=BLANCO, cursor="hand2")
-            logo.pack(side="left", padx=(16, 0), pady=6)
-            logo.bind("<Button-1>", lambda e: self.mostrar_inicio())
+            self.cuadros_marca = [tk.PhotoImage(data=c)
+                                  for c in getattr(imagen_marca, "MONEDA_CHICA", [])]
+            self.logo_cabecera = tk.Label(barra, image=self.img_marca, bg=BLANCO,
+                                          cursor="hand2")
+            self.logo_cabecera.pack(side="left", padx=(16, 0), pady=6)
+            self.logo_cabecera.bind("<Button-1>", lambda e: self.mostrar_inicio())
+            self._vuelta_marca = -1
+            self.after(6000, self._girar_marca)
         except Exception:
             pass                      # sin la imagen la ventana igual sirve
+
 
         cont = tk.Frame(barra, bg=BLANCO)
         cont.pack(side="left", padx=12, pady=6)
@@ -540,6 +601,28 @@ class App(tk.Tk):
         # Las franjas del logo: verde del anillo y rojo de las cintas.
         tk.Frame(self, bg=VERDE, height=4).pack(fill="x")
         tk.Frame(self, bg=ROJO_OSCURO, height=2).pack(fill="x")
+
+    def _girar_marca(self):
+        """
+        El logo de la cabecera da una vuelta cada tanto, como una moneda.
+
+        Es lo mismo que hacen la cartelera y el mantenedor de balanzas: casi
+        todo el rato quieto, y de vez en cuando una vuelta.
+        """
+        try:
+            if self._vuelta_marca < 0:
+                self.logo_cabecera.config(image=self.img_marca)
+                self._vuelta_marca = 0
+                self.after(9000, self._girar_marca)       # quieto un buen rato
+            elif self._vuelta_marca < len(self.cuadros_marca):
+                self.logo_cabecera.config(image=self.cuadros_marca[self._vuelta_marca])
+                self._vuelta_marca += 1
+                self.after(45, self._girar_marca)
+            else:
+                self._vuelta_marca = -1
+                self.after(10, self._girar_marca)
+        except tk.TclError:
+            pass                      # la ventana ya se cerró
 
     def _pie(self):
         pie = tk.Frame(self, bg=BLANCO, highlightthickness=0)
@@ -1559,6 +1642,30 @@ class App(tk.Tk):
             self.sinc.apurar()
             self.avisar("Conectado. Lo anotado ahora se comparte con el celular.")
 
+    # ------------------------------------------------------------ novedades
+    def novedades_pendientes(self):
+        """Lo que salió desde la versión que tenía este computador."""
+        visto = self.datos.config("novedad_vista")
+        return [(v, puntos) for v, puntos in NOVEDADES
+                if actualizador.comparar(v, visto or "0") > 0]
+
+    def mostrar_novedades(self):
+        """
+        Después de actualizar, cuenta lo que trae la versión nueva.
+
+        En un computador recién instalado no hay nada que contar: se marca
+        como visto y no se molesta a nadie.
+        """
+        nuevas = self.novedades_pendientes()
+        if not nuevas:
+            return
+        if not self.datos.config("novedad_vista") and self.datos.total_clientes() == 0:
+            return self.datos.guardar_config("novedad_vista", VERSION)
+        if self.grab_current() is not None:
+            return self.after(3000, self.mostrar_novedades)
+        DialogoNovedades(self, nuevas).mostrar()
+        self.datos.guardar_config("novedad_vista", VERSION)
+
     # ------------------------------------------------------ actualizaciones
     def _revisar_version_sola(self):
         """
@@ -1570,14 +1677,22 @@ class App(tk.Tk):
         if self.datos.config("revisada_el") == date.today().isoformat():
             return
         def mirar():
+            # Este hilo solo pregunta; guardar y pintar los hace la ventana.
+            # La base de datos es de un hilo solo, y tkinter también.
             try:
                 hay, info = actualizador.hay_nueva(VERSION)
             except actualizador.ErrorDeActualizacion:
                 return
-            self.datos.guardar_config("revisada_el", date.today().isoformat())
-            if hay:
-                self.after(0, lambda: self._hay_version_nueva(info))
+            try:
+                self.after(0, lambda: self._anotar_revision(hay, info))
+            except (tk.TclError, RuntimeError):
+                pass                  # la ventana se cerró mientras preguntaba
         threading.Thread(target=mirar, daemon=True).start()
+
+    def _anotar_revision(self, hay, info):
+        self.datos.guardar_config("revisada_el", date.today().isoformat())
+        if hay:
+            self._hay_version_nueva(info)
 
     def _hay_version_nueva(self, info):
         self.nueva_version = info
@@ -2105,6 +2220,93 @@ class DialogoCobranzas(tk.Toplevel):
         if x:
             self.destroy()
             self.padre.abrir_cliente(x["cliente"]["id"])
+
+
+class DialogoNovedades(tk.Toplevel):
+    """Lo que trae la versión nueva, y la invitación a poner la clave."""
+
+    def __init__(self, padre, novedades):
+        tk.Toplevel.__init__(self, padre, bg=BLANCO)
+        self.withdraw()
+        self.title("Novedades")
+        self.resizable(False, False)
+        self.transient(padre)
+        self.padre = padre
+
+        tk.Frame(self, bg=VERDE, height=4).pack(fill="x")
+        cuerpo = tk.Frame(self, bg=BLANCO)
+        cuerpo.pack(fill="both", expand=True, padx=26, pady=(18, 6))
+
+        arriba = tk.Frame(cuerpo, bg=BLANCO)
+        arriba.pack(fill="x")
+        self.img = None
+        try:
+            import imagen_marca
+            self.img = tk.PhotoImage(data=imagen_marca.CABECERA)
+            tk.Label(arriba, image=self.img, bg=BLANCO).pack(side="left", padx=(0, 14))
+        except Exception:
+            pass
+        letras = tk.Frame(arriba, bg=BLANCO)
+        letras.pack(side="left")
+        tk.Label(letras, text="El programa se actualizó", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 16, "bold")).pack(anchor="w")
+        tk.Label(letras, text="Ahora tienes la versión %s" % VERSION, bg=BLANCO,
+                 fg=ROJO, font=(FUENTE, 11, "bold italic")).pack(anchor="w")
+
+        for version, puntos in novedades:
+            tk.Label(cuerpo, text="VERSIÓN %s" % version, bg=BLANCO, fg=SUAVE,
+                     font=(FUENTE, 8, "bold")).pack(anchor="w", pady=(14, 4))
+            for p in puntos:
+                fila = tk.Frame(cuerpo, bg=BLANCO)
+                fila.pack(fill="x", pady=1)
+                tk.Label(fila, text="•", bg=BLANCO, fg=ROJO,
+                         font=(FUENTE, 11, "bold")).pack(side="left", anchor="n",
+                                                         padx=(2, 8))
+                tk.Label(fila, text=p, bg=BLANCO, fg=TINTA, font=(FUENTE, 10),
+                         justify="left", wraplength=px(440), anchor="w").pack(
+                    side="left", fill="x", expand=True)
+
+        self.sin_clave = not padre.datos.hay_clave()
+        if self.sin_clave:
+            caja = tk.Frame(cuerpo, bg=VERDE_CLARO, highlightthickness=1,
+                            highlightbackground=VERDE)
+            caja.pack(fill="x", pady=(16, 0))
+            tk.Label(caja, text="¿Pones ahora la clave de administrador?", bg=VERDE_CLARO,
+                     fg=VERDE_OSCURO, font=(FUENTE, 11, "bold")).pack(anchor="w",
+                                                                      padx=14, pady=(10, 2))
+            tk.Label(caja, bg=VERDE_CLARO, fg=TINTA, font=(FUENTE, 10), justify="left",
+                     wraplength=px(430),
+                     text="Así nadie más puede marcar pagado ni borrar sin su permiso. "
+                          "Después la puede cambiar cuando quiera, en el menú "
+                          "Archivo → «Clave de administrador».").pack(anchor="w", padx=14,
+                                                                      pady=(0, 12))
+
+        pie = tk.Frame(self, bg=PAPEL)
+        pie.pack(fill="x", side="bottom")
+        Boton(pie, "Entendido", self.destroy, "claro" if self.sin_clave else "rojo").pack(
+            side="right", padx=(6, 18), pady=12)
+        if self.sin_clave:
+            Boton(pie, "Poner la clave ahora", self.poner_clave, "verde").pack(
+                side="right", pady=12)
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def mostrar(self):
+        self.update_idletasks()
+        x = self.padre.winfo_rootx() + max(0, (self.padre.winfo_width() -
+                                               self.winfo_reqwidth()) // 2)
+        y = self.padre.winfo_rooty() + px(50)
+        self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+        self.deiconify()
+        self.lift()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+        self.wait_window()
+
+    def poner_clave(self):
+        self.destroy()
+        self.padre.clave_de_administrador()
 
 
 class DialogoActualizar(tk.Toplevel):

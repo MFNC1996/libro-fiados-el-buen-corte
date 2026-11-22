@@ -24,7 +24,29 @@ input[type=text],input[type=password],input[type=email],input[type=tel]{font-siz
 /* ------------------------------------------------------------- cabecera */
 header{background:var(--blanco); display:flex; align-items:center; gap:12px;
        padding:8px 14px; position:sticky; top:0; z-index:10}
-header img{width:46px; height:46px; flex:none}
+/*
+ * El emblema del local, dando vuelta como una moneda: el mismo truco que la
+ * cartelera y el mantenedor de balanzas. Una sola imagen; la cara de atrás es
+ * la misma espejada con rotateY, y backface-visibility esconde la que le toca
+ * estar de espaldas. Diez segundos de ciclo, la mayor parte quieta.
+ */
+.logo-moneda{position:relative; width:46px; height:46px; flex:none;
+             transform-style:preserve-3d; animation:ebc-moneda 10s linear infinite;
+             will-change:transform; cursor:pointer}
+.logo-moneda img{position:absolute; inset:0; width:100%; height:100%;
+                 border-radius:50%; object-fit:contain; backface-visibility:hidden;
+                 -webkit-backface-visibility:hidden}
+.logo-moneda img.sello{transform:rotateY(180deg)}
+.logo-moneda.grande{width:150px; height:150px; margin:10px auto 14px; cursor:default}
+
+@keyframes ebc-moneda{
+  0%, 40%  {transform:rotateY(0deg)}
+  50%, 90% {transform:rotateY(180deg)}
+  100%     {transform:rotateY(360deg)}
+}
+@media (prefers-reduced-motion: reduce){
+  .logo-moneda{animation:none}
+}
 header .nombre{flex:1; min-width:0}
 header .nombre b{display:block; color:var(--rojo); font:italic 700 20px/1.1 "Segoe UI",system-ui,sans-serif;
                  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
@@ -143,7 +165,7 @@ label.campo .rotulo{display:block; margin-bottom:3px}
 
 /* --------------------------------------------------------------- entrar */
 .entrar{max-width:420px; margin:0 auto; padding:24px 18px}
-.entrar img{display:block; width:150px; height:150px; margin:10px auto 14px}
+
 .entrar h1{text-align:center; color:var(--rojo); font:italic 700 24px/1.1 "Segoe UI",sans-serif;
            margin:0}
 .entrar p.sub{text-align:center; color:var(--suave); font-size:11px; font-weight:700;
