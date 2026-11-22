@@ -11,6 +11,9 @@ permissions:
 jobs:
   construir:
     runs-on: windows-latest
+    # Si algo se queda esperando para siempre, se corta aqui y no en seis
+    # horas: esta compilacion entera toma unos 10 minutos.
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +47,7 @@ jobs:
 
       - name: Abrir la app y fotografiar cada pantalla
         shell: pwsh
+        timeout-minutes: 10
         run: empaquetado/capturar.ps1
 
       - name: Asegurar Inno Setup
@@ -69,14 +73,24 @@ jobs:
 
       - name: Comprobar que el instalador sabe volver a abrir el programa
         shell: pwsh
+        timeout-minutes: 8
         run: |
           # Es lo que usa la actualizacion automatica: /SILENT ... /ABRIR=1 deja
           # el programa andando solo. Si esto se rompe, actualizar dejaria la
           # caja cerrada en medio de la venta.
+          #
+          # OJO con "Start-Process -Wait": espera al instalador Y A TODO LO QUE
+          # EL INSTALADOR ABRA. Como aqui el instalador abre el programa (que es
+          # justo lo que se quiere probar), esperar asi no termina nunca. Por eso
+          # se espera solo al proceso del instalador, con WaitForExit.
           $destino = "C:\PruebaAbrir"
-          Start-Process -FilePath "salida\LibroDeFiados-Setup.exe" `
+          $inst = Start-Process -FilePath "salida\LibroDeFiados-Setup.exe" `
             -ArgumentList "/SILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$destino", `
-                          "/TASKS=","/ABRIR=1" -Wait
+                          "/TASKS=","/ABRIR=1" -PassThru
+          if (-not $inst.WaitForExit(240000)) {
+            $inst | Stop-Process -Force
+            Write-Error "El instalador no termino en 4 minutos."; exit 1
+          }
           Start-Sleep -Seconds 12
           $vivos = @(Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue)
           if ($vivos.Count -eq 0) {
@@ -85,14 +99,21 @@ jobs:
           }
           Write-Host "Se volvio a abrir solo despues de instalar en silencio."
           $vivos | Stop-Process -Force
-          Start-Sleep -Seconds 4
+          Start-Sleep -Seconds 5
+
           $desinst = Get-ChildItem $destino -Filter "unins*.exe" | Select-Object -First 1
-          Start-Process -FilePath $desinst.FullName `
-            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
-          Start-Sleep -Seconds 10
+          $u = Start-Process -FilePath $desinst.FullName `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -PassThru
+          $u.WaitForExit(120000) | Out-Null
+          # El desinstalador de Inno se copia a la carpeta temporal y sigue
+          # trabajando despues de que el proceso lanzado termina.
+          $limite = (Get-Date).AddSeconds(90)
+          while ((Test-Path (Join-Path $destino "LibroDeFiados.exe")) -and
+                 (Get-Date) -lt $limite) { Start-Sleep -Seconds 3 }
 
       - name: Instalar de verdad, abrir la app instalada y desinstalar
         shell: pwsh
+        timeout-minutes: 10
         run: |
           $destino = "C:\PruebaLibroDeFiados"
           Write-Host "== Instalando en silencio =="
