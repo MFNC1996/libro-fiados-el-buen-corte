@@ -238,6 +238,42 @@ grant  execute on function public.usuarios_del_local()          to authenticated
 grant  execute on function public.agregar_al_local(text, text)  to authenticated;
 grant  execute on function public.quitar_del_local(text)        to authenticated;
 
+-- ============================================================= recordatorios
+--  Lo que se le ha mandado a cada cliente para cobrarle. Se guarda para no
+--  repetir ni acosar: la ley chilena permite cobrar, pero no hostigar.
+-- ==========================================================================
+
+alter table public.clientes
+  add column if not exists sin_recordatorios boolean not null default false;
+
+create table if not exists public.recordatorios (
+    id          uuid primary key,
+    local_id    uuid not null references public.locales(id) on delete cascade,
+    cliente_id  uuid not null references public.clientes(id) on delete cascade,
+    fecha       date not null,
+    tipo        text not null default 'primero',   -- primero | segundo | a mano
+    monto       integer not null default 0,        -- lo que debia ese dia
+    texto       text not null default '',
+    borrado     boolean not null default false,
+    creado      timestamptz not null default now(),
+    actualizado timestamptz not null default now()
+);
+create index if not exists ix_recordatorios_sync on public.recordatorios (local_id, actualizado);
+create index if not exists ix_recordatorios_cliente on public.recordatorios (cliente_id, fecha);
+
+alter table public.recordatorios enable row level security;
+
+do $$
+begin
+    execute 'drop trigger if exists t_actualizado on public.recordatorios';
+    execute 'create trigger t_actualizado before insert or update on public.recordatorios
+             for each row execute function public.marcar_actualizado()';
+    execute 'drop policy if exists p_recordatorios on public.recordatorios';
+    execute 'create policy p_recordatorios on public.recordatorios for all
+               using (local_id in (select public.mis_locales()))
+               with check (local_id in (select public.mis_locales()))';
+end $$;
+
 -- ======================================================== clave de administrador
 --  Para que no cualquiera pueda marcar pagado, abonar o borrar, el dueno puede
 --  poner una clave. Se pide en el computador y en el celular.

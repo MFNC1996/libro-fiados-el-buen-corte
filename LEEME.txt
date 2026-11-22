@@ -131,10 +131,42 @@ CÓMO SE USA
    sacar la clave. Si se olvida, el dueño la cambia por otra.
 
 
+11. A QUIÉN HAY QUE COBRARLE (novedad de la versión 2.2)
+   Menú Cobranza -> "A quién hay que cobrarle hoy" (o Ctrl+K). También está
+   el botón rojo en la pantalla de inicio, que dice a cuántos hay que
+   cobrarles.
+
+   El programa arma la lista solo:
+   - PRIMER AVISO a los 30 días de la compra más antigua sin pagar.
+   - SEGUNDO AVISO 10 días después, solo si no abonó nada en el medio.
+   - A nadie se le escribe dos veces en la misma semana.
+
+   Eliges a la persona, ves el mensaje ya escrito (se puede corregir antes
+   de mandarlo) y aprietas "Mandar por WhatsApp": se abre WhatsApp con el
+   mensaje listo y queda anotado que se le mandó. Si no tiene teléfono
+   anotado, el mensaje queda copiado para pegarlo a mano.
+
+   "No molestar a este" saca a alguien de la lista para siempre (el
+   compadre, la familia). Se puede volver a activar en "Editar" del cliente.
+
+   La ley chilena permite cobrar pero no hostigar: nada de domingos ni
+   feriados, y en horario hábil. El programa avisa si el día o la hora no
+   corresponden, pero no manda nada solo: siempre aprieta usted.
+
+12. ACTUALIZAR EL PROGRAMA (novedad de la versión 2.2)
+   Cuando hay una versión nueva, aparece abajo a la derecha:
+   "Hay una versión nueva · actualizar". Se le da un clic, se ve qué trae y
+   se aprieta "Actualizar ahora": el programa baja la versión nueva, la
+   instala y se vuelve a abrir solo. No se pierde nada de lo anotado.
+
+   También se puede buscar a mano: menú Ayuda -> "Buscar actualización".
+
+
 ATAJOS DE TECLADO
 -----------------
    Ctrl+N   nuevo cliente              Ctrl+R   abonar
    Ctrl+B   buscar cliente             Ctrl+P   estado de cuenta
+   Ctrl+K   a quién cobrarle hoy
    Esc      volver al resumen          Enter    pasar al siguiente / anotar
 
 

@@ -279,6 +279,73 @@ def telefono_whatsapp(telefono):
     return d
 
 
+# ------------------------------------------------------------- cobranza
+# Cuando se le recuerda a alguien que tiene cuenta pendiente. La ley chilena
+# (ley 19.496 y 21.320) permite cobrar, pero no hostigar: nada de domingos ni
+# festivos, en horario habil, y sin repetir a cada rato.
+DIAS_PRIMER_AVISO = 30
+DIAS_SEGUNDO_AVISO = 40
+DIAS_ENTRE_AVISOS = 7
+HORA_DESDE, HORA_HASTA = 10, 15          # de 10:00 a 15:00
+
+# Festivos chilenos de fecha fija. Los movibles (Semana Santa y los que caen
+# en lunes) no estan: por eso el programa avisa, pero no manda solo.
+FERIADOS_FIJOS = {(1, 1), (5, 1), (5, 21), (6, 29), (7, 16), (8, 15),
+                  (9, 18), (9, 19), (10, 12), (10, 31), (11, 1), (12, 8), (12, 25)}
+
+
+def dia_de_cobranza(fecha=None):
+    """
+    Si hoy se puede cobrar, y si no, por que no.
+
+    Devuelve (se_puede, motivo).
+    """
+    fecha = fecha or date.today()
+    if fecha.weekday() == 6:
+        return False, "Hoy es domingo: la ley no permite cobrar."
+    if fecha.weekday() == 5:
+        return False, "Hoy es sábado: mejor dejarlo para el lunes."
+    if (fecha.month, fecha.day) in FERIADOS_FIJOS:
+        return False, "Hoy es feriado: la ley no permite cobrar."
+    return True, ""
+
+
+def hora_de_cobranza(hora=None):
+    """La hora en que corresponde cobrar: de 10 a 15."""
+    hora = hora if hora is not None else datetime.now().hour
+    if hora < HORA_DESDE:
+        return False, "Todavía es temprano: se cobra desde las %d:00." % HORA_DESDE
+    if hora >= HORA_HASTA:
+        return False, "Ya es tarde: se cobra hasta las %d:00." % HORA_HASTA
+    return True, ""
+
+
+def texto_recordatorio(cliente, compras, tipo="primero", negocio=NEGOCIO):
+    """
+    El mensaje que se le manda. El primero recuerda; el segundo insiste, pero
+    sin amenazar: eso ademas de feo seria ilegal.
+    """
+    nombre = str(cliente.get("nombre") or "").split()[0]
+    deuda = pesos(cliente.get("deuda") or 0)
+    pend = sorted([c for c in compras if c.get("falta", 0) > 0],
+                  key=lambda c: c["fecha"])
+    desde = fecha_txt(pend[0]["fecha"])[:5] if pend else ""
+    detalle = "\n".join("- %s  %s  %s" % (fecha_corta(c["fecha"]),
+                                          c["detalle"] or "Compra", pesos(c["falta"]))
+                        for c in pend[:6])
+    if len(pend) > 6:
+        detalle += "\n- y %d compras más" % (len(pend) - 6)
+    if tipo == "segundo":
+        return ("Hola %s, le escribimos de nuevo de %s.\n\n"
+                "Su cuenta sigue pendiente: %s, desde el %s.\n\n%s\n\n"
+                "Le pedimos acercarse al local esta semana para ponerla al día, o "
+                "para conversar cómo hacerlo. Gracias." % (nombre, negocio, deuda, desde, detalle))
+    return ("Hola %s, le saludamos de %s.\n\n"
+            "Le recordamos que tiene una cuenta pendiente de %s, desde el %s:\n\n%s\n\n"
+            "Cuando pueda, lo esperamos en el local para regularizarla. ¡Gracias!"
+            % (nombre, negocio, deuda, desde, detalle))
+
+
 # --------------------------------------------------------------------- datos
 class Datos(object):
     """
@@ -299,12 +366,13 @@ class Datos(object):
     cuando vuelve la conexion sube lo pendiente.
     """
 
-    TABLAS = ("clientes", "compras", "pagos", "aplicaciones")
+    TABLAS = ("clientes", "compras", "pagos", "aplicaciones", "recordatorios")
     # Lo minimo que tiene que traer una fila nueva que llega del servidor.
     OBLIGATORIAS = {"clientes": ("nombre",),
                     "compras": ("cliente_id", "fecha", "monto"),
                     "pagos": ("cliente_id", "fecha", "monto"),
-                    "aplicaciones": ("pago_id", "compra_id", "monto")}
+                    "aplicaciones": ("pago_id", "compra_id", "monto"),
+                    "recordatorios": ("cliente_id", "fecha")}
 
     def __init__(self, ruta=None):
         self.ruta = ruta or os.path.join(carpeta_datos(), "fiados.sqlite3")
@@ -331,6 +399,7 @@ class Datos(object):
                        telefono    TEXT    NOT NULL DEFAULT '',
                        nota        TEXT    NOT NULL DEFAULT '',
                        activo      INTEGER NOT NULL DEFAULT 1,
+                       sin_recordatorios INTEGER NOT NULL DEFAULT 0,
                        borrado     INTEGER NOT NULL DEFAULT 0,
                        creado      TEXT    NOT NULL DEFAULT '',
                        actualizado TEXT    NOT NULL DEFAULT '')""")
@@ -363,6 +432,25 @@ class Datos(object):
                        borrado     INTEGER NOT NULL DEFAULT 0,
                        creado      TEXT    NOT NULL DEFAULT '',
                        actualizado TEXT    NOT NULL DEFAULT '')""")
+        # Lo que se le ha mandado a cada cliente para cobrarle.
+        c.execute("""CREATE TABLE IF NOT EXISTS recordatorios (
+                       id          TEXT    PRIMARY KEY,
+                       local_id    TEXT    NOT NULL DEFAULT '',
+                       cliente_id  TEXT    NOT NULL REFERENCES clientes(id),
+                       fecha       TEXT    NOT NULL,
+                       tipo        TEXT    NOT NULL DEFAULT 'primero',
+                       monto       INTEGER NOT NULL DEFAULT 0,
+                       texto       TEXT    NOT NULL DEFAULT '',
+                       borrado     INTEGER NOT NULL DEFAULT 0,
+                       creado      TEXT    NOT NULL DEFAULT '',
+                       actualizado TEXT    NOT NULL DEFAULT '')""")
+        c.execute("CREATE INDEX IF NOT EXISTS ix_recordatorios "
+                  "ON recordatorios(cliente_id, fecha)")
+        # El interruptor "no mandarle recordatorios", en bases ya creadas.
+        columnas = [f[1] for f in c.execute("PRAGMA table_info(clientes)")]
+        if columnas and "sin_recordatorios" not in columnas:
+            c.execute("ALTER TABLE clientes ADD COLUMN "
+                      "sin_recordatorios INTEGER NOT NULL DEFAULT 0")
         # Lo que cambio aqui y falta subir.
         c.execute("""CREATE TABLE IF NOT EXISTS pendientes (
                        tabla TEXT NOT NULL,
@@ -385,10 +473,18 @@ class Datos(object):
         return bool(cols) and "borrado" not in cols
 
     def _apartar_base_vieja(self):
-        """Las tablas viejas se guardan aparte, para copiarlas y no perderlas."""
+        """
+        Las tablas viejas se guardan aparte, para copiarlas y no perderlas.
+
+        Solo las que de verdad existan: una base de la version 1 no tiene las
+        tablas que se agregaron despues.
+        """
+        existen = [f[0] for f in self.cx.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")]
         with self.cx:
             for t in self.TABLAS:
-                self.cx.execute("ALTER TABLE %s RENAME TO %s_v1" % (t, t))
+                if t in existen:
+                    self.cx.execute("ALTER TABLE %s RENAME TO %s_v1" % (t, t))
 
     def _copiar_base_vieja(self):
         """
@@ -527,7 +623,7 @@ class Datos(object):
                 for k in columnas:
                     if k in fila:
                         v = fila[k]
-                        if k in ("borrado", "activo"):
+                        if k in ("borrado", "activo", "sin_recordatorios"):
                             v = 1 if v in (True, 1, "true", "t") else 0
                         datos[k] = v
                 existe = self.cx.execute(
@@ -872,6 +968,78 @@ class Datos(object):
                 self._tocar("aplicaciones", a)
             self.cx.execute("UPDATE pagos SET borrado=1 WHERE id=?", (pago_id,))
             self._tocar("pagos", pago_id)
+
+    # -- recordatorios ---------------------------------------------------
+    def recordatorios_de(self, cid):
+        """Lo que se le ha mandado a este cliente, del mas nuevo al mas viejo."""
+        return [dict(f) for f in self.cx.execute(
+            "SELECT * FROM recordatorios WHERE cliente_id=? AND borrado=0 "
+            "ORDER BY fecha DESC, creado DESC", (cid,))]
+
+    def ultimo_recordatorio(self, cid):
+        filas = self.recordatorios_de(cid)
+        return filas[0] if filas else None
+
+    def anotar_recordatorio(self, cid, tipo, texto, monto=0, fecha=None):
+        """Deja constancia de que se le mando el mensaje."""
+        nuevo = self._id()
+        with self.cx:
+            self.cx.execute(
+                "INSERT INTO recordatorios (id, local_id, cliente_id, fecha, tipo, "
+                "monto, texto, creado, actualizado) VALUES (?,?,?,?,?,?,?,?,?)",
+                (nuevo, self.local_id, cid, fecha or date.today().isoformat(), tipo,
+                 int(monto or 0), texto or "", ahora_utc(), ahora_utc()))
+            self._marcar("recordatorios", nuevo)
+        return nuevo
+
+    def no_molestar(self, cid, si=True):
+        """Marca (o desmarca) a un cliente para no mandarle recordatorios."""
+        with self.cx:
+            self.cx.execute("UPDATE clientes SET sin_recordatorios=? WHERE id=?",
+                            (1 if si else 0, cid))
+            self._tocar("clientes", cid)
+
+    def cobranzas(self, hoy=None):
+        """
+        A quien hay que cobrarle hoy, y con que mensaje.
+
+        Primer aviso a los 30 dias de la compra mas antigua sin pagar; el
+        segundo 10 dias despues, solo si no ha pagado nada en el medio. Nunca
+        dos avisos en la misma semana, y nunca a quien pidio que no le
+        escriban o no tiene telefono anotado.
+        """
+        hoy = hoy or date.today()
+        lista = []
+        for cl in self.clientes():
+            if cl["deuda"] <= 0 or cl["sin_recordatorios"]:
+                continue
+            dias = dias_desde(cl["mas_antigua"], hoy)
+            if dias < DIAS_PRIMER_AVISO:
+                continue
+            avisos = self.recordatorios_de(cl["id"])
+            ultimo = avisos[0] if avisos else None
+            if ultimo and dias_desde(ultimo["fecha"], hoy) < DIAS_ENTRE_AVISOS:
+                continue                      # ya se le escribio esta semana
+            if not ultimo:
+                tipo = "primero"
+            elif dias >= DIAS_SEGUNDO_AVISO:
+                # Si abono algo despues del ultimo aviso, se le da mas tiempo.
+                pagos = [p for p in self.pagos_de(cl["id"])
+                         if p["fecha"] >= ultimo["fecha"]]
+                if pagos:
+                    continue
+                tipo = "segundo"
+            else:
+                continue
+            compras = self.compras_de(cl["id"], "pendientes")
+            lista.append({
+                "cliente": cl, "tipo": tipo, "dias": dias,
+                "telefono": telefono_whatsapp(cl["telefono"]),
+                "texto": texto_recordatorio(cl, compras, tipo),
+                "ultimo": ultimo,
+            })
+        lista.sort(key=lambda x: (-x["dias"], x["cliente"]["nombre"]))
+        return lista
 
     # -- totales ---------------------------------------------------------
     def deuda(self, cid):

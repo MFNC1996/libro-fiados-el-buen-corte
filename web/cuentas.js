@@ -220,6 +220,80 @@
       }).join("\n") + "\n\nTotal pendiente: " + pesos(total) + "\n\n¡Gracias!";
   }
 
+  /* ------------------------------------------------------------ cobranza
+   * Las mismas reglas que el computador (nucleo.py): primer recordatorio a
+   * los 30 dias, el segundo 10 dias despues si no abono nada, nunca dos en la
+   * misma semana, y nunca a quien pidio que no le escriban.
+   */
+  var DIAS_PRIMER_AVISO = 30, DIAS_SEGUNDO_AVISO = 40, DIAS_ENTRE_AVISOS = 7;
+
+  function diasDesde(f, hoy) {
+    if (!f) return 0;
+    return Math.round((new Date(iso(hoy || new Date())) -
+                       new Date(String(f).slice(0, 10))) / 86400000);
+  }
+
+  function textoRecordatorio(cliente, compras, tipo, negocio) {
+    negocio = negocio || "Carnicería El Buen Corte";
+    var nombre = String(cliente.nombre || "").split(" ")[0];
+    var deuda = pesos(cliente.deuda || 0);
+    var pend = compras.filter(function (c) { return c.falta > 0; })
+                      .sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });
+    var desde = pend.length ? fechaTxt(pend[0].fecha).slice(0, 5) : "";
+    var detalle = pend.slice(0, 6).map(function (c) {
+      return "- " + fechaCorta(c.fecha) + "  " + (c.detalle || "Compra") + "  " +
+             pesos(c.falta);
+    }).join("\n");
+    if (pend.length > 6) detalle += "\n- y " + (pend.length - 6) + " compras más";
+    if (tipo === "segundo") {
+      return "Hola " + nombre + ", le escribimos de nuevo de " + negocio + ".\n\n" +
+        "Su cuenta sigue pendiente: " + deuda + ", desde el " + desde + ".\n\n" +
+        detalle + "\n\nLe pedimos acercarse al local esta semana para ponerla al día, " +
+        "o para conversar cómo hacerlo. Gracias.";
+    }
+    return "Hola " + nombre + ", le saludamos de " + negocio + ".\n\n" +
+      "Le recordamos que tiene una cuenta pendiente de " + deuda + ", desde el " +
+      desde + ":\n\n" + detalle +
+      "\n\nCuando pueda, lo esperamos en el local para regularizarla. ¡Gracias!";
+  }
+
+  /* A quien hay que cobrarle hoy, con el mensaje listo. */
+  function cobranzas(D, hoy) {
+    hoy = hoy || new Date();
+    var lista = [];
+    D.clientes.forEach(function (cl) {
+      if (cl.activo === false || !cl.deuda || cl.sin_recordatorios) return;
+      var dias = diasDesde(cl.mas_antigua, hoy);
+      if (dias < DIAS_PRIMER_AVISO) return;
+      var avisos = (D.recordatorios || []).filter(function (r) {
+        return r.cliente_id === cl.id;
+      }).sort(function (a, b) { return b.fecha.localeCompare(a.fecha); });
+      var ultimo = avisos[0];
+      if (ultimo && diasDesde(ultimo.fecha, hoy) < DIAS_ENTRE_AVISOS) return;
+      var tipo;
+      if (!ultimo) {
+        tipo = "primero";
+      } else if (dias >= DIAS_SEGUNDO_AVISO) {
+        var abono = D.pagos.some(function (p) {
+          return p.cliente_id === cl.id && p.fecha >= ultimo.fecha;
+        });
+        if (abono) return;              // abono algo: se le da mas tiempo
+        tipo = "segundo";
+      } else {
+        return;
+      }
+      var suyas = D.compras.filter(function (c) {
+        return c.cliente_id === cl.id && c.falta > 0;
+      });
+      lista.push({ cliente: cl, tipo: tipo, dias: dias,
+                   telefono: telefonoWhatsapp(cl.telefono),
+                   texto: textoRecordatorio(cl, suyas, tipo), ultimo: ultimo || null });
+    });
+    return lista.sort(function (a, b) {
+      return b.dias - a.dias || a.cliente.nombre.localeCompare(b.cliente.nombre);
+    });
+  }
+
   /*
    * La huella de la clave de administrador. Es el mismo calculo que hace el
    * computador (PBKDF2, SHA-256, 32 bytes), para que la misma clave sirva en
@@ -262,7 +336,9 @@
     haceCuanto: haceCuanto, diaYFecha: diaYFecha, telefonoWhatsapp: telefonoWhatsapp,
     escapar: escapar, recalcular: recalcular, repartir: repartir,
     textoWhatsapp: textoWhatsapp, huellaClave: huellaClave,
-    claveCorrecta: claveCorrecta, salNueva: salNueva, VUELTAS: 120000
+    claveCorrecta: claveCorrecta, salNueva: salNueva, VUELTAS: 120000,
+    cobranzas: cobranzas, textoRecordatorio: textoRecordatorio, diasDesde: diasDesde,
+    DIAS_PRIMER_AVISO: DIAS_PRIMER_AVISO, DIAS_SEGUNDO_AVISO: DIAS_SEGUNDO_AVISO
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = Cuentas;

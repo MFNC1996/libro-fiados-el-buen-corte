@@ -324,6 +324,75 @@ check("las tablas viejas se guardan por si acaso", bool(d3.cx.execute(
 d3b = N.Datos(ruta_v1)
 check("abrirla de nuevo no duplica nada", len(d3b.clientes()), 1)
 
+print("\n--- a quien hay que cobrarle ---")
+from datetime import timedelta
+def hace(dias):
+    return (date(2026, 11, 20) - timedelta(days=dias)).isoformat()
+HOY = date(2026, 11, 20)                      # un viernes
+
+d4 = N.Datos(os.path.join(tempfile.mkdtemp(), "cobranza.sqlite3"))
+recien = d4.agregar_cliente("Recién Compró", "9 1111 1111")
+d4.anotar(recien, "Molida", 5000, hace(10))
+treinta = d4.agregar_cliente("Treinta Días", "9 2222 2222")
+d4.anotar(treinta, "Costillar", 12000, hace(31))
+viejo = d4.agregar_cliente("Muy Atrasado", "9 3333 3333")
+d4.anotar(viejo, "Asado", 20000, hace(45))
+pagador = d4.agregar_cliente("Ya Pagó", "9 4444 4444")
+pagador_compra = d4.anotar(pagador, "Pollo", 7000, hace(60))
+d4.marcar_pagada(pagador_compra, hace(1))
+callado = d4.agregar_cliente("No Molestar", "9 5555 5555")
+d4.anotar(callado, "Chuleta", 9000, hace(50))
+d4.no_molestar(callado)
+
+lista = d4.cobranzas(HOY)
+nombres = [x["cliente"]["nombre"] for x in lista]
+check("al de 10 dias no se le cobra", "Recién Compró" in nombres, False)
+check("al de 31 dias si", "Treinta Días" in nombres, True)
+check("al de 45 dias tambien", "Muy Atrasado" in nombres, True)
+check("al que ya pago, no", "Ya Pagó" in nombres, False)
+check("al que pidio que no le escriban, tampoco", "No Molestar" in nombres, False)
+check("van primero los mas atrasados", nombres, ["Muy Atrasado", "Treinta Días"])
+check("todos parten con el primer aviso", [x["tipo"] for x in lista],
+      ["primero", "primero"])
+check("el mensaje saluda por el nombre", lista[0]["texto"].startswith("Hola Muy,"), True)
+check("dice cuanto debe", N.pesos(20000) in lista[0]["texto"], True)
+check("y detalla la compra", "Asado" in lista[0]["texto"], True)
+check("trae el telefono listo para WhatsApp", lista[0]["telefono"], "56933333333")
+
+print("\n--- despues de mandarlo, no se repite ---")
+d4.anotar_recordatorio(viejo, "primero", lista[0]["texto"], 20000, hace(3))
+lista = d4.cobranzas(HOY)
+check("no se le vuelve a escribir en la semana",
+      "Muy Atrasado" in [x["cliente"]["nombre"] for x in lista], False)
+check("queda anotado lo que se le mando", d4.ultimo_recordatorio(viejo)["tipo"], "primero")
+
+print("\n--- el segundo aviso, 10 dias despues ---")
+d4.cx.execute("UPDATE recordatorios SET fecha=? WHERE cliente_id=?", (hace(10), viejo))
+d4.cx.commit()
+lista = d4.cobranzas(HOY)
+elviejo = [x for x in lista if x["cliente"]["nombre"] == "Muy Atrasado"]
+check("ahora si le toca el segundo", [x["tipo"] for x in elviejo], ["segundo"])
+check("y el texto insiste", "de nuevo" in elviejo[0]["texto"], True)
+check("sin amenazar", "legal" in elviejo[0]["texto"].lower() or
+      "judicial" in elviejo[0]["texto"].lower(), False)
+
+print("\n--- si abono algo, se le da mas tiempo ---")
+d4.recibir_pago(viejo, 5000, hace(2))
+lista = d4.cobranzas(HOY)
+check("no se le insiste al que abono",
+      "Muy Atrasado" in [x["cliente"]["nombre"] for x in lista], False)
+
+print("\n--- cuando se puede cobrar ---")
+check("un viernes si", N.dia_de_cobranza(date(2026, 11, 20))[0], True)
+check("domingo no", N.dia_de_cobranza(date(2026, 11, 22))[0], False)
+check("sabado tampoco", N.dia_de_cobranza(date(2026, 11, 21))[0], False)
+check("el 25 de diciembre menos", N.dia_de_cobranza(date(2026, 12, 25))[0], False)
+check("el 18 de septiembre tampoco", N.dia_de_cobranza(date(2026, 9, 18))[0], False)
+check("a las 11 de la manana si", N.hora_de_cobranza(11)[0], True)
+check("a las 8 todavia no", N.hora_de_cobranza(8)[0], False)
+check("a las 16 ya no", N.hora_de_cobranza(16)[0], False)
+check("y dice por que", "tarde" in N.hora_de_cobranza(16)[1], True)
+
 print("\n--- 3000 operaciones al azar: las cuentas siempre cuadran ---")
 import random
 azar = random.Random(1996)            # siempre las mismas, para poder repetir una falla

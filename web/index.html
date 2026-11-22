@@ -11,7 +11,7 @@
 <link rel="icon" href="icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Libro de Fiados">
-<link rel="stylesheet" href="estilo.css?v=4">
+<link rel="stylesheet" href="estilo.css?v=5">
 </head>
 <body>
 
@@ -56,6 +56,9 @@
       <div class="buscador">
         <button class="boton rojo ancho" id="btn-nuevo">+&nbsp; Nuevo cliente</button>
       </div>
+      <div class="buscador oculto" id="caja-cobranzas">
+        <button class="boton ancho" id="btn-cobranzas">Cobrar a los atrasados</button>
+      </div>
       <div class="opciones">
         <label><input type="checkbox" id="solo-deben"> Solo los que deben</label>
         <label><input type="checkbox" id="ver-archivados"> Mostrar archivados</label>
@@ -71,6 +74,16 @@
         </div>
         <button class="boton rojo chico" id="btn-instalar">Instalar</button>
       </div>
+    </section>
+
+    <!-- ---------------------------- a quién cobrarle ---------------------------- -->
+    <section class="hoja oculto" id="cobranzas">
+      <button class="volver" id="volver-cobranzas">‹ &nbsp;Volver a la lista</button>
+      <div class="tarjeta">
+        <p class="nombre" style="font-size:19px">A quién hay que cobrarle</p>
+        <p class="datos" id="cobranzas-ayuda"></p>
+      </div>
+      <div class="lista" id="lista-cobranzas"></div>
     </section>
 
     <!-- ---------------------------- hoja del cliente ---------------------------- -->
@@ -136,7 +149,7 @@
 <div id="ventanita"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="cuentas.js?v=4"></script>
-<script src="libro.js?v=4"></script>
+<script src="cuentas.js?v=5"></script>
+<script src="libro.js?v=5"></script>
 </body>
 </html>

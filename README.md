@@ -17,6 +17,10 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
 - Se puede deshacer todo: volver una compra a pendiente o deshacer un abono completo.
 - Estado de cuenta listo para imprimir o guardar como PDF, y mensaje para WhatsApp.
 - Copia de seguridad automática cada día; copia manual y restauración desde el menú Archivo.
+- **Cobranza asistida**: a los 30 días aparece el cliente en «A quién hay que cobrarle», con el
+  mensaje de WhatsApp escrito; segundo aviso a los 10 días si no abonó. Nunca dos en la misma
+  semana, interruptor «no molestar» por cliente, y respeta los días y horas que permite la ley.
+- **Se actualiza solo**: avisa cuando hay versión nueva, baja el instalador, lo corre y vuelve a abrir.
 - **Clave de administrador** (opcional): si el dueño la pone, se pide antes de cobrar, corregir,
   borrar o quitar; anotar nunca la pide. La misma clave en el computador y en el celular, guardada
   como huella PBKDF2 (nunca en claro) y verificada sin internet.

@@ -2,7 +2,7 @@
 ; Instala la aplicacion, crea accesos directos y deja un desinstalador.
 
 #define Nombre    "Libro de Fiados"
-#define Version   "2.1.0"
+#define Version   "2.2.0"
 #define Empresa   "Macoem"
 #define Ejecutable "LibroDeFiados.exe"
 
@@ -49,6 +49,15 @@ Name: "{autodesktop}\{#Nombre}";        Filename: "{app}\{#Ejecutable}"; Tasks: 
 [Run]
 Filename: "{app}\{#Ejecutable}"; Description: "Abrir {#Nombre} ahora"; \
   Flags: nowait postinstall skipifsilent
+; Cuando actualiza el propio programa (se instala en silencio), hay que
+; volver a abrirlo: para eso pasa /ABRIR=1.
+Filename: "{app}\{#Ejecutable}"; Flags: nowait; Check: AbrirAlTerminar
+
+[Code]
+function AbrirAlTerminar: Boolean;
+begin
+  Result := ExpandConstant('{param:ABRIR|0}') = '1';
+end;
 
 [Messages]
 es.WelcomeLabel2=Esto instalara [name/ver] en tu computador.%n%nLos datos (clientes, compras y pagos) se guardan aparte, en tu carpeta de usuario, asi que puedes actualizar la aplicacion sin perder nada de lo anotado.

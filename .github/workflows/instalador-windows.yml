@@ -33,6 +33,9 @@ jobs:
       - name: Probar que se comparte con el celular
         run: python probar_nube.py
 
+      - name: Probar el actualizador
+        run: python probar_actualizador.py
+
       - name: Construir el .exe
         run: pyinstaller --noconfirm --clean empaquetado/LibroDeFiados.spec
 
@@ -63,6 +66,30 @@ jobs:
           Write-Host ("exe:        {0:N1} MB" -f ($e.Length / 1MB))
           Write-Host ("instalador: {0:N1} MB" -f ($i.Length / 1MB))
           if ($i.Length -lt 3MB) { Write-Error "El instalador quedo muy chico."; exit 1 }
+
+      - name: Comprobar que el instalador sabe volver a abrir el programa
+        shell: pwsh
+        run: |
+          # Es lo que usa la actualizacion automatica: /SILENT ... /ABRIR=1 deja
+          # el programa andando solo. Si esto se rompe, actualizar dejaria la
+          # caja cerrada en medio de la venta.
+          $destino = "C:\PruebaAbrir"
+          Start-Process -FilePath "salida\LibroDeFiados-Setup.exe" `
+            -ArgumentList "/SILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$destino", `
+                          "/TASKS=","/ABRIR=1" -Wait
+          Start-Sleep -Seconds 12
+          $vivos = @(Get-Process -Name LibroDeFiados -ErrorAction SilentlyContinue)
+          if ($vivos.Count -eq 0) {
+            Write-Error "Tras actualizar, el programa no se volvio a abrir solo."
+            exit 1
+          }
+          Write-Host "Se volvio a abrir solo despues de instalar en silencio."
+          $vivos | Stop-Process -Force
+          Start-Sleep -Seconds 4
+          $desinst = Get-ChildItem $destino -Filter "unins*.exe" | Select-Object -First 1
+          Start-Process -FilePath $desinst.FullName `
+            -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          Start-Sleep -Seconds 10
 
       - name: Instalar de verdad, abrir la app instalada y desinstalar
         shell: pwsh
@@ -153,13 +180,28 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.1.0
-          name: Libro de Fiados 2.1
+          tag_name: v2.2.0
+          name: Libro de Fiados 2.2
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
             Una hoja por cliente: lo que se anoto, cuanto vale, lo que ya pago
             y lo que queda pendiente.
+
+            ### Novedades de la 2.2
+
+            **A quién hay que cobrarle.** El programa avisa solo: a los 30 dias
+            de la compra mas antigua sin pagar aparece el cliente en la lista
+            de cobranza, con el mensaje de WhatsApp ya escrito. Si a los 10
+            dias siguientes no abono nada, toca el segundo aviso, mas firme.
+            Nadie recibe dos mensajes en la misma semana, y cada cliente tiene
+            un interruptor "no mandarle recordatorios". Los horarios siguen lo
+            que permite la ley chilena de cobranza.
+
+            **Se actualiza solo.** Menu Ayuda -> "Buscar actualizacion", o el
+            aviso que aparece abajo a la derecha cuando hay una version nueva.
+            Baja el instalador, lo corre y vuelve a abrir el programa solo. Lo
+            anotado no se toca.
 
             ### Novedad de la 2.1: clave de administrador
 

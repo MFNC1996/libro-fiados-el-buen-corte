@@ -9,6 +9,7 @@ Aplicacion de escritorio. No necesita internet ni servidor.
 import os
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import urllib.parse
@@ -19,6 +20,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import actualizador
 import nucleo as N
 import instancia
 import estado_cuenta
@@ -38,7 +40,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 # Despues de escribir la clave, no se vuelve a pedir por un rato: cobrar fila
 # por fila con la clave en cada una seria insoportable.
 MINUTOS_SUELTA = 5
@@ -363,6 +365,8 @@ class App(tk.Tk):
         self._version_nube = 0
         self.after(1500, self._mirar_nube)
         self._paso("Cargando clientes...", 52)
+        self.nueva_version = None
+        self.after(4000, self._revisar_version_sola)
         self.recargar_todo()
         self.mostrar_inicio()
         if self._splash is not None:
@@ -487,7 +491,14 @@ class App(tk.Tk):
         cliente.add_command(label="Volver al resumen", accelerator="Esc",
                             command=self.mostrar_inicio)
         barra.add_cascade(label="Cliente", menu=cliente)
+        cobranza = tk.Menu(barra, tearoff=0)
+        cobranza.add_command(label="A quién hay que cobrarle hoy...", accelerator="Ctrl+K",
+                             command=self.cobranzas_de_hoy)
+        barra.add_cascade(label="Cobranza", menu=cobranza)
         ayuda = tk.Menu(barra, tearoff=0)
+        ayuda.add_command(label="Buscar actualización...",
+                          command=lambda: self.buscar_actualizacion(True))
+        ayuda.add_separator()
         ayuda.add_command(label="Cómo se usa", command=self.como_se_usa)
         ayuda.add_command(label="Acerca de", command=self.acerca_de)
         barra.add_cascade(label="Ayuda", menu=ayuda)
@@ -545,11 +556,15 @@ class App(tk.Tk):
                                  font=(FUENTE, 8, "bold"), cursor="hand2")
         self.lbl_nube.pack(side="right", padx=(0, 8))
         self.lbl_nube.bind("<Button-1>", lambda e: self.cuenta_del_local())
+        self.lbl_version = tk.Label(pie, text="", bg=BLANCO, fg=ROJO,
+                                    font=(FUENTE, 8, "bold"), cursor="hand2")
+        self.lbl_version.pack(side="right", padx=(0, 10))
+        self.lbl_version.bind("<Button-1>", lambda e: self.buscar_actualizacion())
 
     def _atajos(self):
         for tecla, accion in (("n", self.nuevo_cliente), ("b", self.ir_a_buscar),
                               ("f", self.ir_a_buscar), ("r", self.recibir_pago),
-                              ("p", self.imprimir_estado)):
+                              ("p", self.imprimir_estado), ("k", self.cobranzas_de_hoy)):
             # En minuscula y en mayuscula, por si esta el Bloq Mayus puesto.
             for t in (tecla, tecla.upper()):
                 self.bind_all("<Control-%s>" % t, lambda e, a=accion: (a(), "break")[1])
@@ -710,6 +725,9 @@ class App(tk.Tk):
                  font=(FUENTE, 9, "bold")).pack(side="left")
         tk.Label(enc, text="Doble clic para abrir su hoja", bg=PAPEL, fg=PISTA,
                  font=(FUENTE, 9)).pack(side="right")
+        self.btn_cobranzas = Boton(enc, "Cobrar a los atrasados", self.cobranzas_de_hoy,
+                                   "claro", "chico")
+        self.btn_cobranzas.pack(side="right", padx=(0, 14))
         marco = tk.Frame(self.caja_mayores, bg=BLANCO, highlightthickness=1,
                          highlightbackground=LINEA)
         marco.pack(fill="both", expand=True)
@@ -783,6 +801,11 @@ class App(tk.Tk):
                                    tags=("viejo",) if dias > 30 else (),
                                    values=(c["nombre"], N.pesos(c["deuda"]),
                                            c["pendientes"], desde, pago))
+        porcobrar = len(self.datos.cobranzas())
+        self.btn_cobranzas.config(
+            text="Cobrar a los atrasados  (%d)" % porcobrar if porcobrar
+            else "Cobrar a los atrasados")
+        self.btn_cobranzas.estilo("rojo" if porcobrar else "claro")
         if not r["mayores"]:
             self.tv_mayores.insert("", "end", iid="nadie", values=(
                 "Nadie debe nada. Todas las cuentas están al día.", "", "", "", ""))
@@ -1021,6 +1044,12 @@ class App(tk.Tk):
             datos.append("Tel. " + cl["telefono"])
         if cl["nota"]:
             datos.append(cl["nota"])
+        ultimo = self.datos.ultimo_recordatorio(self.sel)
+        if ultimo:
+            datos.append("Último recordatorio: %s (%s)" % (N.fecha_corta(ultimo["fecha"]),
+                                                           ultimo["tipo"]))
+        if cl["sin_recordatorios"]:
+            datos.append("No se le mandan recordatorios")
         if not datos:
             datos.append("Sin teléfono ni nota. Puedes agregarlos con «Editar».")
         self.lbl_datos.config(text="   ·   ".join(datos))
@@ -1530,6 +1559,54 @@ class App(tk.Tk):
             self.sinc.apurar()
             self.avisar("Conectado. Lo anotado ahora se comparte con el celular.")
 
+    # ------------------------------------------------------ actualizaciones
+    def _revisar_version_sola(self):
+        """
+        Mira una vez al dia si hay version nueva, sin molestar a nadie.
+
+        Va en segundo plano: si no hay internet o GitHub no contesta, no pasa
+        nada y el programa sigue igual.
+        """
+        if self.datos.config("revisada_el") == date.today().isoformat():
+            return
+        def mirar():
+            try:
+                hay, info = actualizador.hay_nueva(VERSION)
+            except actualizador.ErrorDeActualizacion:
+                return
+            self.datos.guardar_config("revisada_el", date.today().isoformat())
+            if hay:
+                self.after(0, lambda: self._hay_version_nueva(info))
+        threading.Thread(target=mirar, daemon=True).start()
+
+    def _hay_version_nueva(self, info):
+        self.nueva_version = info
+        self.lbl_version.config(
+            text="Hay una versión nueva (%s)  ·  actualizar" % info["version"])
+
+    def buscar_actualizacion(self, a_mano=False):
+        """Menú Ayuda → Buscar actualización, o el aviso de abajo."""
+        if self.grab_current() is not None:
+            return
+        if a_mano:
+            self.config(cursor="watch")
+            self.update_idletasks()
+            try:
+                hay, info = actualizador.hay_nueva(VERSION)
+            except actualizador.ErrorDeActualizacion as e:
+                self.config(cursor="")
+                return messagebox.showwarning("No se pudo revisar", str(e))
+            self.config(cursor="")
+            if not hay:
+                self.lbl_version.config(text="")
+                return messagebox.showinfo(
+                    "Está al día",
+                    "Este computador tiene la versión %s, que es la última." % VERSION)
+            self._hay_version_nueva(info)
+        if not self.nueva_version:
+            return
+        DialogoActualizar(self, self.nueva_version).mostrar()
+
     # ------------------------------------------- clave de administrador
     def puede(self, accion):
         """
@@ -1566,6 +1643,13 @@ class App(tk.Tk):
             self.avisar("Clave puesta. Ahora se pide para cobrar, borrar o quitar.")
         elif r == "sacada":
             self.avisar("Se sacó la clave: ya no se pide para nada.", AMBAR)
+
+    def cobranzas_de_hoy(self):
+        """A quién hay que cobrarle: la lista y los mensajes listos."""
+        if self.grab_current() is not None:
+            return
+        DialogoCobranzas(self, self.datos).mostrar()
+        self.recargar_todo()
 
     def usuarios_del_local(self):
         if self.grab_current() is not None:
@@ -1797,14 +1881,22 @@ class DialogoCliente(Dialogo):
                                 c.get("telefono", ""), tipo="telefono")
         self.e_nota = self.campo(3, "NOTA  (opcional)", "Ej: vecino del frente, paga los "
                                  "viernes", c.get("nota", ""), largo=120)
+        self.var_sin = tk.BooleanVar(value=bool(c.get("sin_recordatorios")))
+        ttk.Checkbutton(self.cuerpo, variable=self.var_sin, style="Blanco.TCheckbutton",
+                        text="No mandarle recordatorios de cobro").grid(
+            row=8, column=0, sticky="w", pady=(12, 0))
 
     def aceptar(self):
         if self.cl:
             self.datos.editar_cliente(self.cl["id"], self.e_nombre.valor(),
                                       self.e_tel.valor(), self.e_nota.valor())
-            return self.cl["id"]
-        return self.datos.agregar_cliente(self.e_nombre.valor(), self.e_tel.valor(),
-                                          self.e_nota.valor())
+            cid = self.cl["id"]
+        else:
+            cid = self.datos.agregar_cliente(self.e_nombre.valor(), self.e_tel.valor(),
+                                             self.e_nota.valor())
+        if bool(self.var_sin.get()) != bool((self.cl or {}).get("sin_recordatorios")):
+            self.datos.no_molestar(cid, self.var_sin.get())
+        return cid
 
 
 class DialogoCuenta(Dialogo):
@@ -1835,6 +1927,304 @@ class DialogoCuenta(Dialogo):
         except sincronizador.ErrorDeNube as e:
             raise ValueError(str(e))
         return True
+
+
+class DialogoCobranzas(tk.Toplevel):
+    """
+    A quien hay que cobrarle hoy, con el mensaje listo.
+
+    El programa no manda nada solo: arma el mensaje, lo abre en WhatsApp y
+    deja anotado que se mando, para no repetirle al mismo a los dos dias.
+    """
+
+    def __init__(self, padre, datos):
+        tk.Toplevel.__init__(self, padre, bg=BLANCO)
+        self.withdraw()
+        self.title("A quién hay que cobrarle")
+        self.transient(padre)
+        self.padre, self.datos = padre, datos
+        self.lista = []
+
+        cab = tk.Frame(self, bg=BLANCO)
+        cab.pack(fill="x", padx=22, pady=(18, 0))
+        tk.Label(cab, text="A quién hay que cobrarle", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).pack(anchor="w")
+        tk.Label(cab, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10), justify="left",
+                 wraplength=px(640),
+                 text="Primer recordatorio a los %d días de la compra más antigua sin "
+                      "pagar; el segundo %d días después, si no ha abonado nada. A nadie "
+                      "se le escribe dos veces en la misma semana."
+                      % (N.DIAS_PRIMER_AVISO,
+                         N.DIAS_SEGUNDO_AVISO - N.DIAS_PRIMER_AVISO)).pack(anchor="w",
+                                                                           pady=(2, 0))
+        self.lbl_cuando = tk.Label(cab, text="", bg=AMBAR_CLARO, fg=AMBAR, padx=10, pady=5,
+                                   font=(FUENTE, 9, "bold"), justify="left")
+
+        cuerpo = tk.Frame(self, bg=BLANCO)
+        cuerpo.pack(fill="both", expand=True, padx=22, pady=(12, 6))
+        marco = tk.Frame(cuerpo, bg=BLANCO, highlightthickness=1, highlightbackground=LINEA)
+        marco.pack(side="left", fill="both", expand=True)
+        cols = ("quien", "debe", "dias", "aviso")
+        self.tv = ttk.Treeview(marco, columns=cols, show="headings", selectmode="browse",
+                               height=10)
+        for c, t, a, al in zip(cols, ("Cliente", "Debe", "Atraso", "Le toca"),
+                               (190, 100, 90, 110), ("w", "e", "center", "w")):
+            self.tv.heading(c, text=t, anchor=al)
+            self.tv.column(c, width=px(a), anchor=al, stretch=(c == "quien"))
+        self.tv.tag_configure("segundo", foreground=ROJO_OSCURO)
+        self.tv.tag_configure("sinwhatsapp", foreground=SUAVE)
+        self.tv.pack(side="left", fill="both", expand=True)
+        self.tv.bind("<<TreeviewSelect>>", lambda e: self._mostrar_mensaje())
+
+        der = tk.Frame(cuerpo, bg=BLANCO)
+        der.pack(side="left", fill="both", expand=True, padx=(14, 0))
+        tk.Label(der, text="EL MENSAJE QUE SE LE VA A MANDAR", bg=BLANCO, fg=SUAVE,
+                 font=(FUENTE, 9, "bold")).pack(anchor="w")
+        tk.Label(der, text="Se puede corregir antes de mandarlo.", bg=BLANCO, fg=PISTA,
+                 font=(FUENTE, 8)).pack(anchor="w", pady=(0, 4))
+        self.texto = tk.Text(der, width=46, height=12, bg=PAPEL, fg=TINTA, bd=0,
+                             font=(FUENTE, 10), wrap="word", padx=10, pady=8,
+                             highlightthickness=1, highlightbackground=LINEA)
+        self.texto.pack(fill="both", expand=True)
+
+        pie = tk.Frame(self, bg=PAPEL)
+        pie.pack(fill="x", side="bottom")
+        Boton(pie, "Cerrar", self.destroy, "claro").pack(side="right", padx=(6, 18),
+                                                         pady=12)
+        self.btn_mandar = Boton(pie, "Mandar por WhatsApp", self.mandar, "verde")
+        self.btn_mandar.pack(side="right", pady=12)
+        self.btn_nunca = Boton(pie, "No molestar a este", self.no_molestar, "claro",
+                               "chico")
+        self.btn_nunca.pack(side="left", padx=(18, 6), pady=12)
+        self.btn_abrir = Boton(pie, "Abrir su hoja", self.abrir_hoja, "claro", "chico")
+        self.btn_abrir.pack(side="left", pady=12)
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def mostrar(self):
+        self.recargar()
+        self.update_idletasks()
+        x = self.padre.winfo_rootx() + max(0, (self.padre.winfo_width() -
+                                               self.winfo_reqwidth()) // 2)
+        y = self.padre.winfo_rooty() + px(60)
+        self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+        self.deiconify()
+        self.lift()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+        self.wait_window()
+
+    def recargar(self):
+        self.lista = self.datos.cobranzas()
+        self.tv.delete(*self.tv.get_children())
+        for i, x in enumerate(self.lista):
+            tags = []
+            if x["tipo"] == "segundo":
+                tags.append("segundo")
+            if not x["telefono"]:
+                tags.append("sinwhatsapp")
+            self.tv.insert("", "end", iid=str(i), tags=tuple(tags), values=(
+                x["cliente"]["nombre"] + ("" if x["telefono"] else "  (sin teléfono)"),
+                N.pesos(x["cliente"]["deuda"]), "%d días" % x["dias"],
+                "1er aviso" if x["tipo"] == "primero" else "2do aviso"))
+        if not self.lista:
+            self.tv.insert("", "end", iid="nadie", values=(
+                "No hay a quién cobrarle hoy.", "", "", ""))
+            self.texto.delete("1.0", "end")
+
+        sepuede, motivo = N.dia_de_cobranza()
+        hora_ok, aviso_hora = N.hora_de_cobranza()
+        aviso = motivo or aviso_hora
+        if aviso and self.lista:
+            self.lbl_cuando.config(text=aviso + "  Igual puedes mandarlo si quieres.")
+            self.lbl_cuando.pack(anchor="w", fill="x", pady=(10, 0))
+        else:
+            self.lbl_cuando.pack_forget()
+        self._botones()
+        if self.lista:
+            self.tv.selection_set("0")
+
+    def _elegido(self):
+        sel = self.tv.selection()
+        if not sel or sel[0] == "nadie":
+            return None
+        return self.lista[int(sel[0])]
+
+    def _mostrar_mensaje(self):
+        x = self._elegido()
+        self.texto.delete("1.0", "end")
+        if x:
+            self.texto.insert("1.0", x["texto"])
+        self._botones()
+
+    def _botones(self):
+        x = self._elegido()
+        self.btn_mandar.activar(bool(x))
+        self.btn_nunca.activar(bool(x))
+        self.btn_abrir.activar(bool(x))
+        if x and not x["telefono"]:
+            self.btn_mandar.config(text="Copiar el mensaje")
+        else:
+            self.btn_mandar.config(text="Mandar por WhatsApp")
+
+    def mandar(self):
+        x = self._elegido()
+        if not x:
+            return
+        texto = self.texto.get("1.0", "end").strip()
+        self.clipboard_clear()
+        self.clipboard_append(texto)
+        if x["telefono"]:
+            webbrowser.open("https://wa.me/%s?text=%s"
+                            % (x["telefono"], urllib.parse.quote(texto)))
+        self.datos.anotar_recordatorio(x["cliente"]["id"], x["tipo"], texto,
+                                       x["cliente"]["deuda"])
+        self.padre.avisar("Recordatorio anotado para %s." % x["cliente"]["nombre"])
+        if not x["telefono"]:
+            messagebox.showinfo(
+                "Copiado", "%s no tiene teléfono anotado.\n\nEl mensaje quedó copiado: "
+                "pégalo en WhatsApp con Ctrl+V." % x["cliente"]["nombre"], parent=self)
+        self.recargar()
+
+    def no_molestar(self):
+        x = self._elegido()
+        if not x:
+            return
+        if not messagebox.askyesno(
+                "No molestar",
+                "¿Dejar de mandarle recordatorios a %s?\n\nSu deuda se sigue viendo "
+                "igual; solo no aparecerá más en esta lista." % x["cliente"]["nombre"],
+                parent=self):
+            return
+        self.datos.no_molestar(x["cliente"]["id"])
+        self.recargar()
+
+    def abrir_hoja(self):
+        x = self._elegido()
+        if x:
+            self.destroy()
+            self.padre.abrir_cliente(x["cliente"]["id"])
+
+
+class DialogoActualizar(tk.Toplevel):
+    """Muestra que trae la version nueva y la instala."""
+
+    def __init__(self, padre, info):
+        tk.Toplevel.__init__(self, padre, bg=BLANCO)
+        self.withdraw()
+        self.title("Actualizar")
+        self.resizable(False, False)
+        self.transient(padre)
+        self.padre, self.info = padre, info
+        self.bajado = self.total = 0
+        self.error = None
+        self.listo = False
+
+        cuerpo = tk.Frame(self, bg=BLANCO)
+        cuerpo.pack(fill="both", expand=True, padx=24, pady=(18, 6))
+        tk.Label(cuerpo, text="Hay una versión nueva", bg=BLANCO, fg=TINTA,
+                 font=(FUENTE, 15, "bold")).pack(anchor="w")
+        tk.Label(cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 10),
+                 text="Tienes la %s  ·  la nueva es la %s   (%d MB)"
+                      % (VERSION, info["version"], round(info["tamano"] / 1048576.0))
+                 ).pack(anchor="w", pady=(2, 10))
+
+        notas = (info["notas"] or "").strip()
+        if notas:
+            marco = tk.Frame(cuerpo, bg=PAPEL, highlightthickness=1,
+                             highlightbackground=LINEA)
+            marco.pack(fill="x")
+            texto = tk.Text(marco, height=8, width=52, bg=PAPEL, fg=TINTA, bd=0,
+                            font=(FUENTE, 9), wrap="word", padx=10, pady=8,
+                            highlightthickness=0)
+            texto.insert("1.0", notas[:1500])
+            texto.config(state="disabled")
+            texto.pack(fill="x")
+
+        tk.Label(cuerpo, bg=BLANCO, fg=SUAVE, font=(FUENTE, 9), justify="left",
+                 wraplength=px(430),
+                 text="Lo anotado no se toca: los clientes, las compras y los pagos "
+                      "quedan donde están. El programa se cierra un momento y se "
+                      "vuelve a abrir solo, ya actualizado.").pack(anchor="w", pady=(10, 0))
+
+        self.barra = tk.Canvas(cuerpo, height=px(6), bg="#ECE7E1", highlightthickness=0,
+                               bd=0)
+        self.relleno = self.barra.create_rectangle(0, 0, 0, px(6), fill=VERDE, width=0)
+        self.lbl = tk.Label(cuerpo, text="", bg=BLANCO, fg=SUAVE, font=(FUENTE, 9))
+
+        pie = tk.Frame(self, bg=PAPEL)
+        pie.pack(fill="x", side="bottom")
+        self.btn_ok = Boton(pie, "Actualizar ahora", self.actualizar, "rojo")
+        self.btn_ok.pack(side="right", padx=(6, 18), pady=12)
+        self.btn_no = Boton(pie, "Después", self.destroy, "claro")
+        self.btn_no.pack(side="right", pady=12)
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def mostrar(self):
+        self.update_idletasks()
+        x = self.padre.winfo_rootx() + (self.padre.winfo_width() - self.winfo_reqwidth()) // 2
+        y = self.padre.winfo_rooty() + px(70)
+        self.geometry("+%d+%d" % (max(0, x), max(0, y)))
+        self.deiconify()
+        self.lift()
+        try:
+            self.grab_set()
+        except tk.TclError:
+            pass
+        self.wait_window()
+
+    def actualizar(self):
+        if not actualizador.se_puede_instalar():
+            return messagebox.showinfo(
+                "Solo en el programa instalado",
+                "La actualización automática funciona en el programa instalado en "
+                "Windows.\n\nAquí puedes bajarla a mano desde la página del "
+                "proyecto.", parent=self)
+        self.btn_ok.activar(False)
+        self.btn_no.activar(False)
+        self.barra.pack(fill="x", pady=(12, 4))
+        self.lbl.pack(anchor="w")
+        self.lbl.config(text="Bajando la actualización...")
+
+        def bajar():
+            try:
+                ruta = actualizador.descargar(
+                    self.info["url"],
+                    avisar=lambda hecho, total: setattr(self, "bajado", hecho) or
+                    setattr(self, "total", total))
+                self.ruta = ruta
+                self.listo = True
+            except actualizador.ErrorDeActualizacion as e:
+                self.error = str(e)
+        threading.Thread(target=bajar, daemon=True).start()
+        self.after(200, self._mirar)
+
+    def _mirar(self):
+        """La barra se mueve desde aquí: lo que baja corre en otro hilo."""
+        if self.error:
+            self.barra.pack_forget()
+            self.lbl.config(text=self.error, fg=ROJO, wraplength=px(430), justify="left")
+            self.btn_ok.activar(True)
+            self.btn_no.activar(True)
+            self.error = None
+            return
+        total = self.total or self.info["tamano"] or 1
+        ancho = self.barra.winfo_width() or px(430)
+        self.barra.coords(self.relleno, 0, 0,
+                          ancho * min(1.0, self.bajado / float(total)), px(6))
+        self.lbl.config(text="Bajando la actualización...  %d%%"
+                             % int(100 * min(1.0, self.bajado / float(total))))
+        if self.listo:
+            self.lbl.config(text="Instalando. El programa se va a cerrar y a abrir solo.")
+            self.update_idletasks()
+            try:
+                actualizador.instalar(self.ruta)
+            except actualizador.ErrorDeActualizacion as e:
+                return messagebox.showerror("No se pudo instalar", str(e), parent=self)
+            self.after(800, self.padre.cerrar)
+            return
+        self.after(200, self._mirar)
 
 
 class DialogoClave(Dialogo):

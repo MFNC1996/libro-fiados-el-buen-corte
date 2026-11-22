@@ -116,6 +116,51 @@ console.log("\n--- lo que se escapa para que no rompa la pagina ---");
 check("nombre con comillas y signos", C.escapar('Juan "El <Flaco>" & Co'),
       "Juan &quot;El &lt;Flaco&gt;&quot; &amp; Co");
 
+console.log("\n--- a quien hay que cobrarle (la misma regla que el computador) ---");
+{
+  const hoy = new Date(2026, 10, 20);
+  const hace = (d) => { const f = new Date(hoy); f.setDate(f.getDate() - d); return C.iso(f); };
+  const E = {
+    clientes: [{ id: "a", nombre: "Atrasado Uno", telefono: "912345678", activo: true },
+               { id: "b", nombre: "Reciente", telefono: "", activo: true },
+               { id: "c", nombre: "Callado", telefono: "933333333", activo: true,
+                 sin_recordatorios: true },
+               { id: "d", nombre: "Muy Atrasado", telefono: "944444444", activo: true }],
+    compras: [{ id: "c1", cliente_id: "a", fecha: hace(35), detalle: "Asado", monto: 20000, creado: "1" },
+              { id: "c2", cliente_id: "b", fecha: hace(5), detalle: "Pollo", monto: 5000, creado: "2" },
+              { id: "c3", cliente_id: "c", fecha: hace(50), detalle: "Pernil", monto: 9000, creado: "3" },
+              { id: "c4", cliente_id: "d", fecha: hace(60), detalle: "Costillar", monto: 30000, creado: "4" }],
+    pagos: [], aplicaciones: [], recordatorios: [] };
+  C.recalcular(E);
+  let lista = C.cobranzas(E, hoy);
+  check("solo los atrasados de verdad", lista.map((x) => x.cliente.nombre),
+        ["Muy Atrasado", "Atrasado Uno"]);
+  check("todos con el primer aviso", lista.map((x) => x.tipo), ["primero", "primero"]);
+  check("el de 5 días no aparece", lista.some((x) => x.cliente.id === "b"), false);
+  check("el que pidió que no le escriban, tampoco",
+        lista.some((x) => x.cliente.id === "c"), false);
+  check("el mensaje saluda y dice el total",
+        lista[0].texto.startsWith("Hola Muy,") && lista[0].texto.includes("$30.000"), true);
+  check("trae el teléfono listo", lista[0].telefono, "56944444444");
+
+  E.recordatorios.push({ id: "r1", cliente_id: "d", fecha: hace(3), tipo: "primero" });
+  lista = C.cobranzas(E, hoy);
+  check("no se le repite en la misma semana",
+        lista.some((x) => x.cliente.id === "d"), false);
+
+  E.recordatorios[0].fecha = hace(11);
+  lista = C.cobranzas(E, hoy);
+  check("a los 10 días le toca el segundo",
+        lista.filter((x) => x.cliente.id === "d").map((x) => x.tipo), ["segundo"]);
+  check("y el texto insiste", lista[0].texto.includes("de nuevo"), true);
+
+  E.pagos.push({ id: "p1", cliente_id: "d", fecha: hace(2), monto: 5000 });
+  C.recalcular(E);
+  lista = C.cobranzas(E, hoy);
+  check("si abonó algo, se le da más tiempo",
+        lista.some((x) => x.cliente.id === "d"), false);
+}
+
 (async function clave() {
   console.log("\n--- la clave de administrador ---");
   // El mismo valor que comprueba el computador (probar_nucleo.py): si no

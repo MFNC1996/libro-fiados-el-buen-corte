@@ -56,9 +56,9 @@ async function traerTodo(tabla) {
 }
 
 async function cargar() {
-  const [clientes, compras, pagos, aplicaciones] = await Promise.all(
-    ["clientes", "compras", "pagos", "aplicaciones"].map(traerTodo));
-  D = { clientes, compras, pagos, aplicaciones };
+  const [clientes, compras, pagos, aplicaciones, recordatorios] = await Promise.all(
+    ["clientes", "compras", "pagos", "aplicaciones", "recordatorios"].map(traerTodo));
+  D = { clientes, compras, pagos, aplicaciones, recordatorios };
   recalcular();
   const { data } = await sb.from("locales")
     .select("clave_huella,clave_sal,clave_vueltas").eq("id", LOCAL_ID).maybeSingle();
@@ -221,13 +221,84 @@ function mostrarAviso(texto, malo) {
   mostrarAviso.reloj = setTimeout(() => a.classList.add("oculto"), 6000);
 }
 
+/* ------------------------------------------------------------ cobranza */
+function pintarBotonCobranzas() {
+  const cuantos = C.cobranzas(D).length;
+  $("caja-cobranzas").classList.toggle("oculto", cuantos === 0);
+  $("btn-cobranzas").textContent = "Cobrar a los atrasados  (" + cuantos + ")";
+  $("btn-cobranzas").className = "boton ancho" + (cuantos ? " rojo" : "");
+}
+
+function abrirCobranzas() {
+  $("panel").classList.add("oculto");
+  $("hoja").classList.add("oculto");
+  $("cobranzas").classList.remove("oculto");
+  window.scrollTo(0, 0);
+  pintarCobranzas();
+}
+
+function cerrarCobranzas() {
+  $("cobranzas").classList.add("oculto");
+  $("panel").classList.remove("oculto");
+  pintar();
+}
+
+function pintarCobranzas() {
+  const lista = C.cobranzas(D);
+  $("cobranzas-ayuda").textContent =
+    "Primer recordatorio a los " + C.DIAS_PRIMER_AVISO + " días; el segundo " +
+    (C.DIAS_SEGUNDO_AVISO - C.DIAS_PRIMER_AVISO) + " días después, si no ha abonado. " +
+    "A nadie se le escribe dos veces en la misma semana.";
+  $("lista-cobranzas").innerHTML = lista.length ? lista.map((x, i) =>
+    '<div class="compra' + (x.tipo === "segundo" ? " parcial" : "") + '">' +
+    '<span class="que"><b>' + escapar(x.cliente.nombre) + "</b><small>" +
+      pesos(x.cliente.deuda) + " · " + x.dias + " días · " +
+      (x.tipo === "primero" ? "1er aviso" : "2do aviso") +
+      (x.telefono ? "" : " · sin teléfono") + "</small></span>" +
+    '<button class="boton verde chico" data-cobrar="' + i + '">' +
+      (x.telefono ? "WhatsApp" : "Copiar") + "</button>" +
+    '<button class="mas" data-nomolestar="' + i + '" title="No molestar">⋯</button></div>'
+  ).join("") : '<p class="vacio">No hay a quién cobrarle hoy.</p>';
+}
+
+async function cobrar(x) {
+  const texto = x.texto;
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch (e) { /* si el celular no deja copiar, igual se abre WhatsApp */ }
+  await insertar("recordatorios", {
+    cliente_id: x.cliente.id, fecha: C.hoyISO(), tipo: x.tipo,
+    monto: x.cliente.deuda, texto: texto });
+  if (x.telefono) {
+    window.open("https://wa.me/" + x.telefono + "?text=" + encodeURIComponent(texto),
+                "_blank");
+    mostrarAviso("Recordatorio anotado para " + x.cliente.nombre + ".");
+  } else {
+    mostrarAviso("Copiado: " + x.cliente.nombre + " no tiene teléfono anotado.");
+  }
+  await refrescar(false);
+  pintarCobranzas();
+}
+
+function noMolestarA(x) {
+  ventanita("No molestar", "¿Dejar de mandarle recordatorios a " +
+    escapar(x.cliente.nombre) + "?",
+    "<p>Su deuda se sigue viendo igual; solo no aparecerá más en esta lista.</p>",
+    async () => {
+      await cambiar("clientes", x.cliente.id, { sin_recordatorios: true });
+      mostrarAviso("Listo, no se le manda más.");
+    }, "No molestar");
+}
+
 function pintar() {
   // Solo los que estan en la lista, igual que en el computador.
   const total = D.clientes.filter((c) => c.activo !== false)
                           .reduce((s, c) => s + c.deuda, 0);
   $("por-cobrar").textContent = pesos(total);
   pintarResumen();
+  pintarBotonCobranzas();
   pintarLista();
+  if (!$("cobranzas").classList.contains("oculto")) pintarCobranzas();
   if (abierto) {
     const cl = D.clientes.find((c) => c.id === abierto);
     if (!cl) { volverALaLista(); } else { pintarHoja(cl); }
@@ -400,7 +471,9 @@ function nuevoCliente() {
   ventanita("Nuevo cliente", "Cada cliente tiene su propia hoja.",
     campo("v-nombre", "Nombre", $("buscar").value, 'placeholder="Ej: Juan Pérez"') +
     campo("v-tel", "Teléfono (opcional)", "", 'inputmode="tel" placeholder="Ej: 9 1234 5678"') +
-    campo("v-nota", "Nota (opcional)", "", 'placeholder="Ej: vecino del frente"'),
+    campo("v-nota", "Nota (opcional)", "", 'placeholder="Ej: vecino del frente"') +
+    '<label class="interruptor"><input type="checkbox" id="v-sinrec"> ' +
+    "No mandarle recordatorios de cobro</label>",
     async () => {
       const nombre = $("v-nombre").value.trim().replace(/\s+/g, " ");
       if (!nombre) throw new Error("Escribe el nombre del cliente.");
@@ -409,7 +482,8 @@ function nuevoCliente() {
         throw new Error('Ya hay un cliente que se llama "' + nombre + '".');
       }
       await insertar("clientes", { nombre: nombre, telefono: $("v-tel").value.trim(),
-                                   nota: $("v-nota").value.trim() });
+                                   nota: $("v-nota").value.trim(),
+                                   sin_recordatorios: $("v-sinrec").checked });
       mostrarAviso("Cliente agregado.");
     }, "Agregar cliente");
 }
@@ -418,12 +492,15 @@ function editarCliente(cl) {
   ventanita("Editar datos", escapar(cl.nombre),
     campo("v-nombre", "Nombre", cl.nombre) +
     campo("v-tel", "Teléfono (opcional)", cl.telefono, 'inputmode="tel"') +
-    campo("v-nota", "Nota (opcional)", cl.nota),
+    campo("v-nota", "Nota (opcional)", cl.nota) +
+    '<label class="interruptor"><input type="checkbox" id="v-sinrec"' +
+    (cl.sin_recordatorios ? " checked" : "") + "> No mandarle recordatorios de cobro</label>",
     async () => {
       const nombre = $("v-nombre").value.trim().replace(/\s+/g, " ");
       if (!nombre) throw new Error("El nombre no puede quedar vacío.");
       await cambiar("clientes", cl.id, { nombre: nombre, telefono: $("v-tel").value.trim(),
-                                         nota: $("v-nota").value.trim() });
+                                         nota: $("v-nota").value.trim(),
+                                         sin_recordatorios: $("v-sinrec").checked });
       mostrarAviso("Datos guardados.");
     });
 }
@@ -746,6 +823,15 @@ function conectarBotones() {
     });
   });
   $("logo-cabecera").addEventListener("click", volverALaLista);
+  $("btn-cobranzas").addEventListener("click", abrirCobranzas);
+  $("volver-cobranzas").addEventListener("click", cerrarCobranzas);
+  $("lista-cobranzas").addEventListener("click", (e) => {
+    const lista = C.cobranzas(D);
+    const b = e.target.closest("[data-cobrar]");
+    if (b) return cobrar(lista[Number(b.dataset.cobrar)]);
+    const n = e.target.closest("[data-nomolestar]");
+    if (n) noMolestarA(lista[Number(n.dataset.nomolestar)]);
+  });
   $("clave-admin").addEventListener("click", (e) => { e.preventDefault(); ponerClave(); });
 }
 

@@ -359,6 +359,54 @@ check("y si deja quitar al ayudante", quitados == ["mostrador@local.cl"])
 du.destroy()
 v.datos.guardar_config("refresco", "")
 
+print("\n--- la pantalla de cobranzas ---")
+from datetime import timedelta as _td
+atrasado = v.datos.agregar_cliente("Deudor Antiguo", "9 7777 8888")
+viejo_hace = (N.date.today() - _td(days=40)).isoformat()
+v.datos.anotar(atrasado, "Asado de tira", 18000, viejo_hace)
+sin_tel = v.datos.agregar_cliente("Sin Teléfono")
+v.datos.anotar(sin_tel, "Pernil", 9000, viejo_hace)
+v.recargar_todo()
+al_dia()
+check("el resumen avisa a cuantos hay que cobrarles",
+      "(2)" in v.btn_cobranzas.cget("text"))
+co = app.DialogoCobranzas(v, v.datos)
+co.recargar()
+check("los dos salen en la lista", len(co.tv.get_children()) == 2)
+check("y marca al que no tiene telefono",
+      any("sin teléfono" in co.tv.item(i, "values")[0] for i in co.tv.get_children()))
+co.tv.selection_set("0")
+co._mostrar_mensaje()
+check("muestra el mensaje listo", "cuenta pendiente" in co.texto.get("1.0", "end"))
+check("con el monto", "$18.000" in co.texto.get("1.0", "end") or
+      "$9.000" in co.texto.get("1.0", "end"))
+co.mandar()
+check("al mandarlo queda anotado", v.datos.ultimo_recordatorio(atrasado) is not None or
+      v.datos.ultimo_recordatorio(sin_tel) is not None)
+check("y sale de la lista de hoy", len(co.tv.get_children()) == 1)
+co.tv.selection_set("0")
+co.no_molestar()
+check("se puede marcar 'no molestar'", len(co.tv.get_children()) == 1 and
+      co.tv.item(co.tv.get_children()[0], "values")[0] == "No hay a quién cobrarle hoy.")
+co.destroy()
+v.recargar_todo()
+al_dia()
+check("y el resumen vuelve a quedar sin pendientes",
+      "(" not in v.btn_cobranzas.cget("text"))
+
+print("\n--- el aviso de version nueva ---")
+check("al principio no hay aviso", v.lbl_version.cget("text") == "")
+v._hay_version_nueva({"version": "9.9.9", "notas": "Arregla algo",
+                      "url": "http://x/LibroDeFiados-Setup.exe", "tamano": 14000000})
+check("avisa abajo", "9.9.9" in v.lbl_version.cget("text"))
+dlg = app.DialogoActualizar(v, v.nueva_version)
+check("la ventanita dice las dos versiones",
+      app.VERSION in dlg.winfo_children()[0].winfo_children()[1].cget("text"))
+dlg.actualizar()
+check("fuera de Windows explica que no se instala sola",
+      preguntas[-1] == "Solo en el programa instalado")
+dlg.destroy()
+
 print("\n--- la clave de administrador ---")
 check("sin clave puesta, no se pide nada", v.puede("probar") is True)
 huella, sal, vueltas = N.huella_clave("1234")
