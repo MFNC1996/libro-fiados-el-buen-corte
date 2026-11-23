@@ -131,10 +131,11 @@ CÓMO SE USA
    NO se pide para anotar lo que lleva la gente: eso es lo del día a día y
    tiene que ser rápido.
 
-   Se escribe una vez y queda suelta por 5 minutos, así se puede cobrar
-   varias cosas seguidas sin repetirla. Es la misma clave en el computador
-   y en el celular. Solo el dueño puede ponerla o cambiarla, y para eso el
-   computador tiene que estar conectado con la cuenta del local.
+   Se pide CADA VEZ, a propósito: marcar algo como pagado es justo lo que
+   no tiene que poder hacerse aprovechando que alguien la escribió recién.
+   Es la misma clave en el computador y en el celular. Solo el dueño puede
+   ponerla o cambiarla, y para eso el computador tiene que estar conectado
+   con la cuenta del local.
 
    La clave no se guarda en ninguna parte, ni en el computador ni en
    internet: se guarda una huella de ella, de la que no se puede volver a

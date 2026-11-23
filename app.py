@@ -41,7 +41,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "2.3.1"
+VERSION = "2.4.0"
 
 # Lo que trae cada versión, contado para el dueño del local. Al actualizar se
 # muestra lo que salió desde la versión que tenía, no la lista entera.
@@ -59,10 +59,12 @@ NOVEDADES = [
                "clic."]),
     ("2.3.0", ["El logo gira como una moneda al abrir, igual que en los demás "
                "programas del local."]),
+    ("2.4.0", ["La clave de administrador se pide CADA VEZ que se marca algo como "
+               "pagado, se abona, se corrige o se borra. Antes quedaba suelta unos "
+               "minutos; ya no.",
+               "En el celular, «¿Olvidaste tu clave?» manda un correo para poner una "
+               "clave nueva."]),
 ]
-# Despues de escribir la clave, no se vuelve a pedir por un rato: cobrar fila
-# por fila con la clave en cada una seria insoportable.
-MINUTOS_SUELTA = 5
 AUTOR = "Macoem"
 TITULO = "Libro de Fiados  -  El Buen Corte   |   by %s" % AUTOR
 
@@ -391,7 +393,6 @@ class App(tk.Tk):
         self._icono()
 
         self.sel = None                 # cliente abierto
-        self._desbloqueado_hasta = 0    # hasta cuando no se vuelve a pedir la clave
         self.orden = "nombre"           # como se ordena la lista de clientes
         self.filtro = "pendientes"      # que compras se ven
         self._pintando = False
@@ -1730,20 +1731,15 @@ class App(tk.Tk):
         """
         Pide la clave antes de cobrar o de borrar, si el dueno puso una.
 
-        Una vez escrita queda suelta unos minutos, para no tener que repetirla
-        en cada fila mientras se esta cobrando.
+        Se pide SIEMPRE, cada vez. Antes quedaba suelta unos minutos; el dueno
+        pidio que no, y tiene razon: marcar algo como pagado es justo lo que no
+        tiene que poder hacerse aprovechando que otro la escribio recien.
         """
         if not self.datos.hay_clave():
             return True
-        if time.time() < self._desbloqueado_hasta:
-            self._desbloqueado_hasta = time.time() + MINUTOS_SUELTA * 60
-            return True
         if self.grab_current() is not None:
             return False
-        if DialogoClave(self, self.datos, accion).mostrar():
-            self._desbloqueado_hasta = time.time() + MINUTOS_SUELTA * 60
-            return True
-        return False
+        return bool(DialogoClave(self, self.datos, accion).mostrar())
 
     def clave_de_administrador(self):
         if self.grab_current() is not None:
@@ -1757,7 +1753,6 @@ class App(tk.Tk):
             return
         r = DialogoPonerClave(self, self.datos).mostrar()
         if r == "puesta":
-            self._desbloqueado_hasta = time.time() + MINUTOS_SUELTA * 60
             self.avisar("Clave puesta. Ahora se pide para cobrar, borrar o quitar.")
         elif r == "sacada":
             self.avisar("Se sacó la clave: ya no se pide para nada.", AMBAR)
@@ -2447,8 +2442,8 @@ class DialogoClave(Dialogo):
         self.e_clave = self.campo(1, "CLAVE", "")
         self.e_clave.config(show="•")
         tk.Label(self.cuerpo, bg=BLANCO, fg=PISTA, font=(FUENTE, 8),
-                 text="Se pide una vez; después queda suelta por %d minutos."
-                      % MINUTOS_SUELTA).grid(row=4, column=0, sticky="w", pady=(6, 0))
+                 text="Se pide cada vez, a propósito.").grid(row=4, column=0, sticky="w",
+                                                             pady=(6, 0))
 
     def aceptar(self):
         if not self.datos.clave_sirve(self.e_clave.valor()):
@@ -2471,7 +2466,8 @@ class DialogoPonerClave(Dialogo):
                  text="Con una clave puesta, el programa la pide antes de marcar "
                       "pagado, abonar, corregir, borrar o quitar un cliente. Anotar "
                       "lo que lleva la gente sigue sin pedir nada.\n\n"
-                      "Es la misma clave en el computador y en el celular.").grid(
+                      "Se pide cada vez. Es la misma clave en el computador y en el "
+                      "celular.").grid(
             row=1, column=0, sticky="w", pady=(2, 0))
         self.e_nueva = self.campo(1, "CLAVE NUEVA", "Al menos 4 números o letras")
         self.e_nueva.config(show="•")

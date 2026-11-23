@@ -21,8 +21,8 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
   mensaje de WhatsApp escrito; segundo aviso a los 10 días si no abonó. Nunca dos en la misma
   semana, interruptor «no molestar» por cliente, y respeta los días y horas que permite la ley.
 - **Se actualiza solo**: avisa cuando hay versión nueva, baja el instalador, lo corre y vuelve a abrir.
-- **Clave de administrador** (opcional): si el dueño la pone, se pide antes de cobrar, corregir,
-  borrar o quitar; anotar nunca la pide. La misma clave en el computador y en el celular, guardada
+- **Clave de administrador** (opcional): si el dueño la pone, se pide **cada vez** antes de cobrar,
+  corregir, borrar o quitar; anotar nunca la pide. La misma clave en el computador y en el celular, guardada
   como huella PBKDF2 (nunca en claro) y verificada sin internet.
 - Pantalla de carga con el logo girando como moneda (igual que la cartelera y las balanzas),
   y una sola ventana abierta a la vez.

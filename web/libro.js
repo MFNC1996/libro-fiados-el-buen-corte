@@ -25,8 +25,7 @@ let ocupado = false;                      // hay una ventanita abierta
 let firma = "";                           // para no redibujar si nada cambio
 let instalador = null;                    // el aviso del celular para instalarla
 let clave = { huella: "", sal: "", vueltas: 0 };   // la clave que puso el dueno
-let sueltaHasta = 0;                      // hasta cuando no se vuelve a pedir
-const MINUTOS_SUELTA = 5;
+
 
 /* Las cuentas viven en cuentas.js, probadas aparte con node. */
 const C = window.Cuentas;
@@ -72,12 +71,9 @@ async function cargar() {
  * Cobrar, corregir o borrar pide la clave, si el dueno puso una. Anotar lo
  * que lleva la gente no pide nada: es lo del dia a dia.
  */
+/* Se pide cada vez, igual que en el computador: no queda suelta un rato. */
 function puede(accion) {
   if (!clave.huella) return Promise.resolve(true);
-  if (Date.now() < sueltaHasta) {
-    sueltaHasta = Date.now() + MINUTOS_SUELTA * 60000;
-    return Promise.resolve(true);
-  }
   return new Promise((resolver) => {
     ocupado = true;
     $("ventanita").innerHTML =
@@ -86,8 +82,7 @@ function puede(accion) {
       '<label class="campo"><span class="rotulo">Clave</span>' +
       '<input type="password" id="v-clave" autocomplete="current-password"></label>' +
       '<p class="error oculto" id="v-error"></p>' +
-      '<p class="ayuda-clave">Se pide una vez; después queda suelta por ' +
-      MINUTOS_SUELTA + ' minutos.</p>' +
+      '<p class="ayuda-clave">Se pide cada vez, a propósito.</p>' +
       '<div class="pie"><button class="boton" id="v-cancelar">Cancelar</button>' +
       '<button class="boton rojo" id="v-ok">Continuar</button></div></div></div>';
     const cerrar = (r) => { ocupado = false; $("ventanita").innerHTML = ""; resolver(r); };
@@ -96,10 +91,7 @@ function puede(accion) {
       $("v-ok").disabled = true;
       const sirve = await C.claveCorrecta($("v-clave").value, clave.huella, clave.sal,
                                           clave.vueltas);
-      if (sirve) {
-        sueltaHasta = Date.now() + MINUTOS_SUELTA * 60000;
-        return cerrar(true);
-      }
+      if (sirve) return cerrar(true);
       $("v-error").textContent = "Esa no es la clave.";
       $("v-error").classList.remove("oculto");
       $("v-ok").disabled = false;
@@ -135,7 +127,6 @@ function ponerClave() {
         { p_huella: huella, p_sal: sal, p_vueltas: nueva ? C.VUELTAS : 0 });
       if (error) throw new Error(error.message);
       clave = { huella: huella, sal: sal, vueltas: nueva ? C.VUELTAS : 0 };
-      sueltaHasta = nueva ? Date.now() + MINUTOS_SUELTA * 60000 : 0;
       mostrarAviso(nueva ? "Clave puesta." : "Se sacó la clave: ya no se pide para nada.");
     }, hay ? "Cambiar la clave" : "Poner la clave");
 }

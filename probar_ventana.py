@@ -476,19 +476,22 @@ def responder(clave):
     return original
 
 original = responder("mala")
-v._desbloqueado_hasta = 0
 check("con la clave equivocada no deja pasar", v.puede("probar") is False)
 responder("1234")
 check("con la clave correcta deja pasar", v.puede("probar") is True)
+check("y la vuelve a pedir la vez siguiente: no queda suelta",
+      v.puede("probar") is True)       # pasa, pero porque la vuelve a escribir
+pedidas = []
+app.DialogoClave.mostrar = lambda self: (pedidas.append(1), None)[1]
+check("si se cancela, no deja pasar", v.puede("probar") is False)
+check("y la pidio de nuevo", len(pedidas) == 1)
 app.DialogoClave.mostrar = original
-check("y queda suelta un rato", v.puede("probar") is True)
 
 print("\n--- con clave puesta, cobrar y borrar la piden ---")
 cid2 = v.datos.agregar_cliente("Cliente de la clave")
 compra = v.datos.anotar(cid2, "Pernil", 7000)
 v.abrir_cliente(cid2)
 al_dia()
-v._desbloqueado_hasta = 0
 preguntadas = []
 app.DialogoClave.mostrar = lambda self: (preguntadas.append(self.cuerpo.winfo_children()[1]
                                                             .cget("text")), None)[1]
@@ -501,8 +504,11 @@ check("borrar tambien la pide", len(preguntadas) == 2)
 check("y no se borro", len(v.datos.compras_de(cid2)) == 1)
 v.recibir_pago()
 check("abonar tambien", len(preguntadas) == 3)
+v.cambiar_pagada(compra)
+check("y la pide otra vez en la compra siguiente, sin plazo de gracia",
+      len(preguntadas) == 4)
 v.quitar_cliente()
-check("quitar al cliente tambien", len(preguntadas) == 4)
+check("quitar al cliente tambien", len(preguntadas) == 5)
 check("los avisos dicen para que es", all("Para " in t for t in preguntadas))
 
 print("\n--- anotar no pide nada: es lo del dia a dia ---")
@@ -511,7 +517,7 @@ v.e_monto.poner("5000")
 v.anotar()
 al_dia()
 check("se anoto sin preguntar", v.datos.deuda(cid2) == 7000 + 5000)
-check("y siguen sin pedirse mas claves", len(preguntadas) == 4)
+check("y siguen sin pedirse mas claves", len(preguntadas) == 5)
 app.DialogoClave.mostrar = original
 v.datos.guardar_huella("", "", 0)
 v.mostrar_inicio()

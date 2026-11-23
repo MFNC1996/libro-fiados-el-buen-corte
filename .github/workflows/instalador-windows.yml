@@ -201,13 +201,21 @@ jobs:
       - name: Publicar la version descargable
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.3.1
-          name: Libro de Fiados 2.3.1
+          tag_name: v2.4.0
+          name: Libro de Fiados 2.4
           body: |
             Libro de fiados para Windows de Carniceria El Buen Corte, Loncoche.
 
             Una hoja por cliente: lo que se anoto, cuanto vale, lo que ya pago
             y lo que queda pendiente.
+
+            ### Novedad de la 2.4
+
+            La clave de administrador se pide CADA VEZ que se marca algo como
+            pagado, se abona, se corrige o se borra. Antes quedaba suelta cinco
+            minutos despues de escribirla; ya no, porque marcar pagado es justo
+            lo que no debe poder hacerse aprovechando que otro la escribio
+            recien.
 
             ### Novedad de la 2.3.1
 
