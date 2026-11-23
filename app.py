@@ -41,7 +41,7 @@ LINEA = "#DED7CF"
 SUAVE = "#6C625C"
 PISTA = "#A39B94"
 
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 
 # Lo que trae cada versión, contado para el dueño del local. Al actualizar se
 # muestra lo que salió desde la versión que tenía, no la lista entera.
@@ -1613,6 +1613,9 @@ class App(tk.Tk):
                 text="Al día con el celular" if not pend
                 else "Subiendo %d cambio%s..." % (pend, "" if pend == 1 else "s"),
                 fg=VERDE)
+        elif "entrar de nuevo" in (e.get("aviso") or ""):
+            # Pasa cuando cambian la clave de la cuenta desde el celular.
+            self.lbl_nube.config(text="Hay que entrar de nuevo  ·  toca aquí", fg=ROJO)
         else:
             self.lbl_nube.config(
                 text="Sin internet" + ("  ·  %d por subir" % pend if pend else "") +

@@ -93,10 +93,20 @@ CÓMO SE USA
      Adentro hay un botón "Instalar" que deja el acceso directo en la
      pantalla de inicio, con el logo del local.
 
+   SI SE OLVIDA LA CLAVE DE LA CUENTA:
+   En la página del celular, abajo del botón ENTRAR, está "¿Olvidaste tu
+   clave?". Se escribe el correo, llega un enlace y ahí mismo se pone una
+   clave nueva. Estando adentro también se puede cambiar, con el enlace
+   "cambiar mi clave" que está abajo.
+   Ojo: esa es la clave de la CUENTA (para entrar). La clave de
+   administrador, la que pide el programa para cobrar o borrar, es otra y se
+   cambia en el menú Archivo.
+
    Abajo a la derecha, el programa dice cómo va:
        "Al día con el celular"     todo sincronizado
        "Subiendo N cambios..."     está mandando lo último
        "Sin internet · se anota igual"
+       "Hay que entrar de nuevo"   cambió la clave de la cuenta
    Si se corta internet, el programa sigue funcionando exactamente igual:
    lo anotado se guarda y se sube solo cuando vuelve la señal.
 

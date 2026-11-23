@@ -171,6 +171,10 @@ label.campo .rotulo{display:block; margin-bottom:3px}
 .entrar p.sub{text-align:center; color:var(--suave); font-size:11px; font-weight:700;
               letter-spacing:.1em; margin:4px 0 22px}
 
+.olvide{text-align:center; margin:14px 0 0}
+.olvide a{color:var(--suave); font-size:14px; text-decoration:underline}
+.entrar .explica{color:var(--suave); font-size:14px; margin:0 0 16px; text-align:center}
+
 footer{padding:14px 14px calc(18px + env(safe-area-inset-bottom));
         text-align:center; color:var(--pista); font-size:11px}
 

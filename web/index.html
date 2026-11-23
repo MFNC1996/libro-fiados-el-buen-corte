@@ -11,7 +11,7 @@
 <link rel="icon" href="icono-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Libro de Fiados">
-<link rel="stylesheet" href="estilo.css?v=6">
+<link rel="stylesheet" href="estilo.css?v=7">
 </head>
 <body>
 
@@ -35,6 +35,33 @@
     </label>
     <button class="boton rojo ancho" id="btn-entrar" type="submit">ENTRAR</button>
     <p id="error-entrar" class="aviso mal oculto"></p>
+    <p class="olvide"><a href="#" id="olvide">¿Olvidaste tu clave?</a></p>
+  </form>
+  <footer>Libro de Fiados · by Macoem</footer>
+</section>
+
+<!-- ====================== poner una clave nueva ====================== -->
+<section id="clave-nueva" class="entrar oculto">
+  <div class="logo-moneda grande">
+    <img class="cara" src="logo.png" alt="Carnicería El Buen Corte">
+    <img class="sello" src="logo.png" alt="">
+  </div>
+  <h1>El Buen Corte</h1>
+  <p class="sub">PONER UNA CLAVE NUEVA</p>
+  <form id="forma-clave-nueva">
+    <p class="explica">Escribe la clave con la que vas a entrar de ahora en adelante,
+      en el celular y en el computador del local.</p>
+    <label class="campo">
+      <span class="rotulo">Clave nueva</span>
+      <input type="password" id="clave1" autocomplete="new-password" required>
+    </label>
+    <label class="campo">
+      <span class="rotulo">Escríbela de nuevo</span>
+      <input type="password" id="clave2" autocomplete="new-password" required>
+    </label>
+    <button class="boton verde ancho" id="btn-clave-nueva" type="submit">
+      Guardar la clave nueva</button>
+    <p id="error-clave-nueva" class="aviso mal oculto"></p>
   </form>
   <footer>Libro de Fiados · by Macoem</footer>
 </section>
@@ -149,13 +176,14 @@
   </div>
   <footer>Libro de Fiados · by Macoem ·
     <a href="#" id="clave-admin" style="color:inherit">clave de administrador</a> ·
+    <a href="#" id="cambiar-clave" style="color:inherit">cambiar mi clave</a> ·
     <a href="#" id="salir" style="color:inherit">cerrar sesión</a></footer>
 </section>
 
 <div id="ventanita"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="cuentas.js?v=6"></script>
-<script src="libro.js?v=6"></script>
+<script src="cuentas.js?v=7"></script>
+<script src="libro.js?v=7"></script>
 </body>
 </html>

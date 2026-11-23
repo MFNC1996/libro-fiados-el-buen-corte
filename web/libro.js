@@ -749,7 +749,93 @@ function comoInstalarla() {
 
 function conectado(si) {
   $("entrar").classList.toggle("oculto", si);
+  $("clave-nueva").classList.add("oculto");
   $("app").classList.toggle("oculto", !si);
+}
+
+/* ------------------------------------------------ olvidé mi clave -------
+ * Supabase manda un correo con un enlace. Al abrirlo, la página vuelve con
+ * una sesión especial para cambiar la clave: ahí se muestra la pantalla de
+ * "poner una clave nueva".
+ */
+function olvideLaClave() {
+  ventanita("¿Olvidaste tu clave?",
+    "Te mandamos un correo con un enlace. Lo abres desde el celular y ahí " +
+    "mismo pones una clave nueva.",
+    campo("v-correo", "Tu correo", $("correo").value.trim(),
+          'type="email" inputmode="email" placeholder="elbuencorte@gmail.com"'),
+    async () => {
+      const correo = $("v-correo").value.trim();
+      if (!correo || correo.indexOf("@") < 0) throw new Error("Escribe tu correo.");
+      const { error } = await sb.auth.resetPasswordForEmail(correo, {
+        redirectTo: location.origin + location.pathname });
+      if (error) throw new Error(error.message);
+      mostrarAvisoEntrar("Listo: te mandamos un correo a " + correo + ". Ábrelo y " +
+                         "sigue el enlace para poner tu clave nueva. Si no llega, " +
+                         "revisa la carpeta de correo no deseado.", false);
+    }, "Mandarme el correo");
+}
+
+/* El aviso de la pantalla de entrada (la de adentro todavía no existe). */
+function mostrarAvisoEntrar(texto, malo) {
+  const p = $("error-entrar");
+  p.textContent = texto;
+  p.className = "aviso " + (malo ? "mal" : "ok");
+}
+
+function pedirClaveNueva() {
+  $("entrar").classList.add("oculto");
+  $("app").classList.add("oculto");
+  $("clave-nueva").classList.remove("oculto");
+  const campo = $("clave1");
+  if (campo) campo.focus();
+}
+
+async function guardarClaveNueva(ev) {
+  ev.preventDefault();
+  const error = $("error-clave-nueva");
+  const uno = $("clave1").value, dos = $("clave2").value;
+  error.classList.add("oculto");
+  if (uno !== dos) {
+    error.textContent = "Las dos claves no son iguales.";
+    return error.classList.remove("oculto");
+  }
+  if (uno.length < 6) {
+    error.textContent = "La clave tiene que tener al menos 6 letras o números.";
+    return error.classList.remove("oculto");
+  }
+  const btn = $("btn-clave-nueva");
+  btn.disabled = true;
+  const r = await sb.auth.updateUser({ password: uno });
+  btn.disabled = false;
+  if (r.error) {
+    error.textContent = r.error.message;
+    return error.classList.remove("oculto");
+  }
+  $("clave1").value = $("clave2").value = "";
+  history.replaceState(null, "", location.pathname);   // se limpia el enlace
+  conectado(true);
+  await refrescar(false);
+  mostrarAviso("Listo: tu clave quedó cambiada. Úsala también en el computador.");
+}
+
+/* Cambiar la clave estando adentro, sin pasar por el correo. */
+function cambiarMiClave() {
+  ventanita("Cambiar mi clave",
+    "Es la clave con la que entras al libro, en el celular y en el computador. " +
+    "No es la clave de administrador.",
+    campo("v-clave1", "Clave nueva", "", 'type="password" placeholder="Al menos 6"') +
+    campo("v-clave2", "Escríbela de nuevo", "", 'type="password"'),
+    async () => {
+      const uno = $("v-clave1").value, dos = $("v-clave2").value;
+      if (uno !== dos) throw new Error("Las dos claves no son iguales.");
+      if (uno.length < 6) {
+        throw new Error("La clave tiene que tener al menos 6 letras o números.");
+      }
+      const { error } = await sb.auth.updateUser({ password: uno });
+      if (error) throw new Error(error.message);
+      mostrarAviso("Clave cambiada. Úsala también en el computador del local.");
+    }, "Cambiar la clave", "verde");
 }
 
 async function entrar(ev) {
@@ -833,6 +919,12 @@ function conectarBotones() {
     if (n) noMolestarA(lista[Number(n.dataset.nomolestar)]);
   });
   $("clave-admin").addEventListener("click", (e) => { e.preventDefault(); ponerClave(); });
+  $("cambiar-clave").addEventListener("click", (e) => {
+    e.preventDefault();
+    cambiarMiClave();
+  });
+  $("olvide").addEventListener("click", (e) => { e.preventDefault(); olvideLaClave(); });
+  $("forma-clave-nueva").addEventListener("submit", guardarClaveNueva);
 }
 
 function mandarWhatsapp(cl) {
@@ -845,8 +937,20 @@ function mandarWhatsapp(cl) {
 (async function arrancar() {
   conectarBotones();
   prepararInstalacion();
+
+  // Si viene del enlace del correo, lo que toca es poner la clave nueva.
+  // Ojo: en ese momento YA hay sesión (la que trae el enlace), así que sin
+  // esto la página se iría derecho al libro y nunca pediría la clave.
+  const recuperando = location.hash.indexOf("type=recovery") >= 0;
+  sb.auth.onAuthStateChange((evento) => {
+    if (evento === "PASSWORD_RECOVERY") pedirClaveNueva();
+  });
+  if (recuperando) pedirClaveNueva();
+
   const { data } = await sb.auth.getSession();
-  if (data && data.session) {
+  if (recuperando) {
+    // se queda en la pantalla de la clave nueva
+  } else if (data && data.session) {
     conectado(true);
     await refrescar(false);
   } else {

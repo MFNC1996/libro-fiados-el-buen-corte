@@ -34,6 +34,7 @@ El manual de uso está en [LEEME.txt](LEEME.txt).
 
 El mismo libro, en el celular del dueño: **https://mfnc1996.github.io/libro-fiados-el-buen-corte/**
 Se entra con correo y clave, y desde ahí mismo se instala el acceso directo en la pantalla de inicio.
+Si se olvida la clave, «¿Olvidaste tu clave?» manda un correo con un enlace para ponerla de nuevo.
 
 Lo que se anota en el computador aparece en el celular y al revés, en unos segundos. Sin internet,
 el programa del local sigue anotando y sube lo pendiente cuando vuelve la señal.
